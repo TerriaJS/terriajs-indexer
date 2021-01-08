@@ -2,7 +2,7 @@
 
 # terriajs-indexer
 
-A tool for generating search index TerriaJS datasets. 
+A tool for generating search index for TerriaJS datasets. 
 
 It can currently index Cesium 3D tiles.
 
