@@ -33,11 +33,11 @@ function index3dTiles(
   const idProperty = indexesConfig.idProperty;
   const data: Record<string, any>[] = [];
 
-  let dataRowIndex = 0;
+  let dataRowId = 0;
   for (const entry of tilesetPropertiesIterator(tileset, tilesetDir)) {
     const { tilePosition, properties } = entry;
     indexBuilders.forEach((b) =>
-      b.addIndexValue(dataRowIndex, properties[b.property])
+      b.addIndexValue(dataRowId, properties[b.property])
     );
     const position = getZoomTarget(
       indexesConfig.positionProperties,
@@ -49,7 +49,7 @@ function index3dTiles(
       [idProperty]: idValue,
       ...position,
     });
-    dataRowIndex += 1;
+    dataRowId += 1;
   }
 
   const indexes = writeIndexes(indexBuilders, outDir);

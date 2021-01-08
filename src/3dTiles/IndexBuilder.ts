@@ -16,19 +16,19 @@ export type IndexBuilder =
   | EnumIndexBuilder;
 
 export class NumericIndexBuilder {
-  readonly idValuePairs: { dataRowIndex: number; value: number }[] = [];
+  readonly idValuePairs: { dataRowId: number; value: number }[] = [];
   range?: { min: number; max: number };
 
   constructor(readonly property: string, readonly config: IndexConfig) {}
 
-  addIndexValue(dataRowIndex: number, value: any) {
+  addIndexValue(dataRowId: number, value: any) {
     if (typeof value === "number") {
       this.range = {
         min: this.range === undefined ? value : Math.min(value, this.range.min),
         max: this.range === undefined ? value : Math.max(value, this.range.max),
       };
     }
-    this.idValuePairs.push({ dataRowIndex, value });
+    this.idValuePairs.push({ dataRowId, value });
   }
 
   writeIndex(fileId: number, outDir: string): NumericIndex {
@@ -55,8 +55,8 @@ export class TextIndexBuilder {
     this.miniSearchIndex = new MiniSearch({ fields: [property] });
   }
 
-  addIndexValue(dataRowIndex: number, value: any) {
-    this.miniSearchIndex.add({ id: dataRowIndex, [this.property]: value });
+  addIndexValue(dataRowId: number, value: any) {
+    this.miniSearchIndex.add({ id: dataRowId, [this.property]: value });
   }
 
   writeIndex(fileId: number, outDir: string): TextIndex {
@@ -75,13 +75,13 @@ export class TextIndexBuilder {
 }
 
 export class EnumIndexBuilder {
-  readonly valueIds: Record<string, { dataRowIndex: number }[]> = {};
+  readonly valueIds: Record<string, { dataRowId: number }[]> = {};
 
   constructor(readonly property: string, readonly config: IndexConfig) {}
 
-  addIndexValue(dataRowIndex: number, value: any) {
+  addIndexValue(dataRowId: number, value: any) {
     this.valueIds[value] = this.valueIds[value] || [];
-    this.valueIds[value].push({ dataRowIndex });
+    this.valueIds[value].push({ dataRowId });
   }
 
   writeIndex(fileId: number, outDir: string): EnumIndex {
@@ -100,7 +100,7 @@ export class EnumIndexBuilder {
   writeValueIndex(
     fileId: number,
     valueId: number,
-    ids: { dataRowIndex: number }[],
+    ids: { dataRowId: number }[],
     outDir: string
   ): EnumValue {
     const fileName = `${fileId}-${valueId}.csv`;
