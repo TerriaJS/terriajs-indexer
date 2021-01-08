@@ -1,4 +1,4 @@
-*Notice: Experimental tool. Expect the API to break as we make changes*
+*Note: Experimental tool. Expect the API to break as we make changes*
 
 # terriajs-indexer
 
