@@ -141,6 +141,7 @@ function main() {
     printUsageAndExit();
   }
 
+  fse.mkdirpSync(outDir);
   const tilesetDir = path.dirname(tilesetFile);
   index3dTiles(tileset, tilesetDir, indexesConfig, outDir);
 }
