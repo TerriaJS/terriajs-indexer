@@ -102,3 +102,9 @@ dist
 
 # TernJS port file
 .tern-port
+
+# Nix files
+shell.drv
+default.nix
+
+.envrc

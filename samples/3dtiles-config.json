@@ -1,0 +1,21 @@
+{
+  /* Name of the property to be used as an identifier */
+  "idProperty": "OBJECTID",
+
+  /* Define the properties to be indexed, keyed by the property name */
+  "indexes": {
+    "GEOSCAPE_AREA": {
+      // Type of the property, possible values include: numeric, text & enum
+      "type": "numeric"
+    },
+    "BLDGHEIGHT": {
+      "type": "numeric"
+    },
+    "GEOSCAPE_ROOF_SLOPE": {
+      "type": "text"
+    },
+    "GEOSCAPE_ROOF_MATER": {
+      "type": "enum"
+    }
+  }
+}
