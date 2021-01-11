@@ -17,7 +17,7 @@ yarn install
 ## Generating index for Cesium 3d Tiles
 
 ```
-ts-node --skip-ignore src/3dTiles/index.ts </path/to/tileset.json> </path/to/config.json> </path/to/output/directory>
+ts-node src/3dTiles/indexer.ts </path/to/tileset.json> </path/to/config.json> </path/to/output/directory>
 ```
 
 Script parameters:
@@ -32,7 +32,7 @@ This generates an index in the given output directory. Check the `indexRoot.json
 You can also dump all the tileset properties as a CSV file. This might be useful for debugging.
 
 ```
-$ ts-node --skip-ignore src/3dTiles/dumpCsv.ts </path/to/tileset.json> </path/to/output.csv>
+$ ts-node src/3dTiles/dumpCsv.ts </path/to/tileset.json> </path/to/output.csv>
 ```
 
 Script parameters:
