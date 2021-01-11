@@ -4,7 +4,8 @@
     "moduleResolution": "node",
     "target": "esNext",
     "module": "commonjs",
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "outDir": "build/"
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "**/*.spec.ts"]

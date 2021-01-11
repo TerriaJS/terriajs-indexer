@@ -1,12 +1,7 @@
 import MiniSearch from "minisearch";
 import * as path from "path";
 import * as fse from "fs-extra";
-import {
-  EnumIndex,
-  EnumValue,
-  NumericIndex,
-  TextIndex,
-} from "terriajs/lib/Models/ItemSearchProviders/Index";
+import { Index, NumericIndex, EnumIndex, TextIndex, EnumValue } from "./Index";
 import writeCsv from "../writeCsv";
 import { IndexConfig } from "./Config";
 
@@ -14,6 +9,9 @@ export type IndexBuilder =
   | NumericIndexBuilder
   | TextIndexBuilder
   | EnumIndexBuilder;
+
+// Return a new type having the same shape as the index T minus the methods
+export type IndexDefinition<T extends Index> = Omit<T, "load" | "search">;
 
 export class NumericIndexBuilder {
   readonly idValuePairs: { dataRowId: number; value: number }[] = [];

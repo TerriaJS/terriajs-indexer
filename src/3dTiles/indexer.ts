@@ -1,9 +1,6 @@
 import * as fse from "fs-extra";
 import * as path from "path";
-import {
-  Index,
-  IndexRoot,
-} from "terriajs/lib/Models/ItemSearchProviders/Index";
+import { Index, IndexRoot } from "./Index";
 import writeCsv from "../writeCsv";
 import {
   IndexesConfig,

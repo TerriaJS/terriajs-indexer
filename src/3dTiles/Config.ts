@@ -1,12 +1,5 @@
-import {
-  assertObject,
-  assertString,
-  isJsonString,
-} from "terriajs/lib/Core/Json";
-import {
-  IndexType,
-  parseIndexType,
-} from "terriajs/lib/Models/ItemSearchProviders/Index";
+import { assertObject, assertString, isJsonString } from "./Json";
+import { IndexType, indexTypes } from "./Index";
 
 export type IndexesConfig = {
   idProperty: string;
@@ -74,4 +67,12 @@ function parseIndexConfig(json: any): IndexConfig {
   return {
     type: parseIndexType(json.type),
   };
+}
+
+function parseIndexType(json: any): IndexType {
+  assertString(json, "IndexType");
+  if (indexTypes.includes(json)) return json as IndexType;
+  throw new Error(
+    `Expected index type to be ${indexTypes.join("|")}, got ${json}`
+  );
 }
