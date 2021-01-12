@@ -2,7 +2,7 @@ import MiniSearch from "minisearch";
 import * as path from "path";
 import * as fse from "fs-extra";
 import { Index, NumericIndex, EnumIndex, TextIndex, EnumValue } from "./Index";
-import writeCsv from "../writeCsv";
+import writeCsv from "./writeCsv";
 import { IndexConfig } from "./Config";
 
 export type IndexBuilder =

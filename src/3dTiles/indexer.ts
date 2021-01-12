@@ -1,14 +1,14 @@
 import * as fse from "fs-extra";
 import * as path from "path";
-import { Index, IndexRoot } from "./Index";
+import { Index, IndexRoot } from "../Index";
 import writeCsv from "../writeCsv";
 import {
   IndexesConfig,
   parseIndexesConfig,
   PositionProperties,
   ZoomTarget,
-} from "./Config";
-import { createIndexBuilder, IndexBuilder } from "./IndexBuilder";
+} from "../Config";
+import { createIndexBuilder, IndexBuilder } from "../IndexBuilder";
 import tilesetPropertiesIterator from "./tilesetPropertiesIterator";
 
 const USAGE =
