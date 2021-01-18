@@ -50,9 +50,9 @@ function index3dTiles(
   }
 
   const indexes = writeIndexes(indexBuilders, outDir);
-  const dataUrl = writeData(data, outDir);
+  const resultsDataUrl = writeResultsData(data, outDir);
   const indexRoot: IndexRoot = {
-    dataUrl,
+    resultsDataUrl,
     idProperty: indexesConfig.idProperty,
     indexes,
   };
@@ -90,8 +90,8 @@ function writeIndexes(
 /**
  * Writes the data.csv file under `outDir` and returns its path.
  */
-function writeData(data: Record<string, any>[], outDir: string): string {
-  const fileName = "data.csv";
+function writeResultsData(data: Record<string, any>[], outDir: string): string {
+  const fileName = "resultsData.csv";
   const filePath = path.join(outDir, fileName);
   writeCsv(filePath, data);
   return fileName;

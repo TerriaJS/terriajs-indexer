@@ -2,7 +2,7 @@
 // Figure out a build strategy that avoids this duplication.
 
 export interface IndexRoot {
-  dataUrl: string;
+  resultsDataUrl: string;
   idProperty: string;
   indexes: Record<string, Index>;
 }
