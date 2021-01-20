@@ -36,7 +36,7 @@ This generates an index in the given output directory. Check the `indexRoot.json
 
 - `positionProperties: PositionProperties`
   - Optional
-  - We need to index the position of each features so that we can zoom close to
+  - We need to index the position of each feature so that we can zoom close to
     it when the user selects it from the search results. `positionProperties`
     allow specifying the name of the properites to be used as the latitude,
     longitude or height of the feature. 
