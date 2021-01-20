@@ -28,20 +28,19 @@ Script parameters:
 This generates an index in the given output directory. Check the `indexRoot.json` to see how the index is structured.
 
 
-### Configuration options
+### Indexer Configuration options
 
 - `idProperty: string`
   - Required
   - Name of the property to be used as the ID for indexing
+
 - `positionProperties: PositionProperties`
   - Optional
-  - For each feature, we need to know its position so that we can zoom close to
-    it when the user selects it from the search results. You can use
-    `positionProperties` to specify the name of the properites to be used as
-    the latitude, longitude or height of the feature. If not provided, we use
-    the latitude, longitude & radius of the leaf tile containing the feature as
-    its position. This works but, sometimes we wont be able to zoom close
-    enough to the feature and the highlight will be difficult to spot.
+  - We need to index the position of each features so that we can zoom close to
+    it when the user selects it from the search results. `positionProperties`
+    allow specifying the name of the properites to be used as the latitude,
+    longitude or height of the feature. 
+    
     - `latitude: string`
       - Required
       - Name of the property to be used as `lattiude` of the feature
@@ -51,6 +50,12 @@ This generates an index in the given output directory. Check the `indexRoot.json
     - `height: string`
       - Optional
       - Name of the property to be used as `height` of the feature
+
+    If not provided, we use the latitude,
+    longitude & radius of the leaf tile containing the feature as its
+    position. This works, but sometimes we wont be able to zoom close enough to
+    the feature and the highlight will be difficult to spot.
+
 - `indexes: Record<string, IndexConfig>`
   - Required
   - An object with the property name as the key and an [index
