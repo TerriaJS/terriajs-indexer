@@ -51,11 +51,11 @@ This generates an index in the given output directory. Check the `indexRoot.json
     - `height: string`
       - Optional
       - Name of the property to be used as `height` of the feature
-  - `indexes: Record<string, IndexConfig>`
-    - Required
-    - An object with the property name as the key and an [index
-      configuration](#index-configuration) as its value. Only the properties specified in
-      this object will be indexed.
+- `indexes: Record<string, IndexConfig>`
+  - Required
+  - An object with the property name as the key and an [index
+    configuration](#index-configuration) as its value. Only the properties
+    specified in this object will be indexed.
 
 ### Index configuration
 
