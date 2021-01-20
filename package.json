@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "description": "A tool for generating static search indexes for TerriaJS datasets.",
   "license": "Apache-2.0",
+  "engines": {
+    "node": ">=14.15.3"
+  },
   "dependencies": {
     "cesium": "^1.77.0",
     "fs-extra": "^9.0.1",
