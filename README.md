@@ -43,13 +43,13 @@ This generates an index in the given output directory. Check the `indexRoot.json
     
     - `latitude: string`
       - Required
-      - Name of the property to be used as `lattiude` of the feature
+      - Name of the property to be used as latitude of the feature
     - `longitude: string`
       - Required
-      - Name of the property to be used as `longitude` of the feature
+      - Name of the property to be used as longitude of the feature
     - `height: string`
       - Optional
-      - Name of the property to be used as `height` of the feature
+      - Name of the property to be used as height of the feature
 
     If not provided, we use the latitude,
     longitude & radius of the leaf tile containing the feature as its
