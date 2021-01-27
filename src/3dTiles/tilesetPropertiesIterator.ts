@@ -1,6 +1,11 @@
-import { Matrix4 } from "cesium";
+import { Matrix4, ComponentDatatype } from "cesium";
 import * as fse from "fs-extra";
 import * as path from "path";
+import { assertNumber, assertObject, assertString } from "../Json";
+import {
+  parseBinaryProperty,
+  readPropertyValuesFromBinaryBatchTable,
+} from "./BinaryProperty";
 import getTilePosition, { TilePosition } from "./getTilePosition";
 
 /**
@@ -35,13 +40,36 @@ function* tilePropertiesIterator(
   const b3dmPath = path.join(tilesetDir, uri);
   const b3dmBuffer = fse.readFileSync(b3dmPath);
   const featureTable = JSON.parse(readFeatureTable(b3dmBuffer).toString());
-  const batchTable = JSON.parse(readBatchTable(b3dmBuffer).toString());
 
   const batchLength = featureTable.BATCH_LENGTH;
   if (typeof batchLength !== "number") {
     console.error("Missing or invalid batchLength: ${batchLength}");
     return;
   }
+
+  const { json, binary } = readBatchTable(b3dmBuffer);
+
+  const jsonBatchTable = JSON.parse(json.toString());
+  const binaryBatchTable = binary;
+
+  const batchTable = Object.entries(jsonBatchTable).reduce(
+    (acc: Record<string, any[]>, [key, entry]) => {
+      let values;
+      if (Array.isArray(entry)) {
+        values = entry;
+      } else {
+        const binaryProperty = parseBinaryProperty(entry);
+        values = readPropertyValuesFromBinaryBatchTable(
+          binaryProperty,
+          binaryBatchTable,
+          batchLength
+        );
+      }
+      acc[key] = values;
+      return acc;
+    },
+    {}
+  );
 
   const tileTransform =
     tile.transform !== undefined
@@ -92,19 +120,32 @@ function readFeatureTable(b3dmBuffer: Buffer): Buffer {
   return b3dmBuffer.subarray(28, 28 + featureTableJSONByteLength);
 }
 
-function readBatchTable(b3dmBuffer: Buffer): Buffer {
+function readBatchTable(
+  b3dmBuffer: Buffer
+): { json: Buffer; binary: Uint8Array } {
   const featureTableJSONByteLength = readFeatureTableJSONByteLength(b3dmBuffer);
   const featureTableBinaryByteLength = readFeatureTableBinaryByteLength(
     b3dmBuffer
   );
   const batchTableJSONByteLength = readBatchTableJSONByteLength(b3dmBuffer);
-  return b3dmBuffer.subarray(
-    28 + featureTableJSONByteLength + featureTableBinaryByteLength,
+  const batchTableBinaryByteLength = readBatchTableBinaryByteLength(b3dmBuffer);
+
+  const jsonStart =
+    28 + featureTableJSONByteLength + featureTableBinaryByteLength;
+  const jsonEnd =
     28 +
-      featureTableJSONByteLength +
-      featureTableBinaryByteLength +
-      batchTableJSONByteLength
-  );
+    featureTableJSONByteLength +
+    featureTableBinaryByteLength +
+    batchTableJSONByteLength;
+  const binaryEnd = jsonEnd + batchTableBinaryByteLength;
+
+  const json = b3dmBuffer.subarray(jsonStart, jsonEnd);
+  const binary = new Uint8Array(b3dmBuffer.subarray(jsonEnd, binaryEnd));
+  return { json, binary };
+}
+
+function readBinaryBatchTable(b3dmBuffer: Buffer): Buffer {
+  return b3dmBuffer.subarray();
 }
 
 function readFeatureTableJSONByteLength(b3dmBuffer: Buffer): number {
@@ -117,6 +158,10 @@ function readFeatureTableBinaryByteLength(b3dmBuffer: Buffer): number {
 
 function readBatchTableJSONByteLength(b3dmBuffer: Buffer): number {
   return b3dmBuffer.readUInt32LE(20);
+}
+
+function readBatchTableBinaryByteLength(b3dmBuffer: Buffer): number {
+  return b3dmBuffer.readUInt32LE(24);
 }
 
 /**
