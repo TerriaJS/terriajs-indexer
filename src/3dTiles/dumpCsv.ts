@@ -1,6 +1,6 @@
 import * as fse from "fs-extra";
 import * as path from "path";
-import tilesetPropertiesIterator, { Value } from "./tilesetPropertiesIterator";
+import tilesetFeaturesIterator, { Value } from "./tilesetFeaturesIterator";
 
 const USAGE = "USAGE: dumpCsv.ts <tileset.json file> <outputfile>";
 
@@ -9,7 +9,7 @@ function dumpCsv(
   tilesetDir: string,
   csv: fse.WriteStream
 ): number {
-  const rows = tilesetPropertiesIterator(tileset, tilesetDir);
+  const rows = tilesetFeaturesIterator(tileset, tilesetDir);
 
   // Write header and first row
   const firstRow: Value = rows.next().value;
