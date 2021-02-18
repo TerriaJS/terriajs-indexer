@@ -69,7 +69,7 @@ function readBatchTableBinaryByteLength(b3dmBuffer: Buffer): number {
 function* tileFeaturesIterator(
   tile: any,
   tilesetDir: string,
-  parentTransform: Matrix4
+  tilePosition: TilePosition
 ) {
   const uri = tile.content?.uri || tile.content?.url;
   if (typeof uri !== "string") {
@@ -109,18 +109,6 @@ function* tileFeaturesIterator(
     {}
   );
 
-  const tileTransform =
-    tile.transform !== undefined
-      ? Matrix4.unpack(tile.transform)
-      : Matrix4.clone(Matrix4.IDENTITY);
-
-  const transform = Matrix4.multiply(
-    parentTransform,
-    tileTransform,
-    new Matrix4()
-  );
-
-  const tilePosition = getTilePosition(tile, transform);
   for (let batchId = 0; batchId < batchLength; batchId++) {
     const properties = Object.entries(batchTable).reduce(
       (acc: any, [key, vals]) => {
@@ -151,10 +139,6 @@ function* tileAndSubtreeFeaturesIterator(
   tilesetDir: string,
   parentTransform: Matrix4
 ): Generator<Value> {
-  for (const row of tileFeaturesIterator(tile, tilesetDir, parentTransform)) {
-    yield row;
-  }
-
   const tileTransform =
     tile.transform !== undefined
       ? Matrix4.unpack(tile.transform)
@@ -165,6 +149,11 @@ function* tileAndSubtreeFeaturesIterator(
     tileTransform,
     new Matrix4()
   );
+  const tilePosition = getTilePosition(tile, transform);
+
+  for (const row of tileFeaturesIterator(tile, tilesetDir, tilePosition)) {
+    yield row;
+  }
 
   if (Array.isArray(tile.children)) {
     for (const child of tile.children) {
@@ -200,7 +189,7 @@ export default function* tilesetFeaturesIterator(
   for (const entry of tileAndSubtreeFeaturesIterator(
     tileset.root,
     tilesetDir,
-    rootTransform
+    Matrix4.IDENTITY.clone()
   )) {
     yield entry;
   }
