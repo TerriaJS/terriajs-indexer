@@ -1,6 +1,6 @@
 // See: https://github.com/CesiumGS/3d-tiles/blob/master/specification/TileFormats/Batched3DModel/README.md#feature-table
 
-import * as binaryProperty from "./BinaryProperty";
+import * as binaryProperty from "./binaryProperty";
 
 export type FeatureTable = {
   jsonFeatureTable: any;
