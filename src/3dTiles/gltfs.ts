@@ -1,3 +1,6 @@
+// Various utility functions for working with GLTFs
+// See: https://github.com/KhronosGroup/glTF/blob/master/specification/2.0/README.md
+
 import { Cartesian3 } from "cesium";
 
 const sizeOfUint32 = 4;
