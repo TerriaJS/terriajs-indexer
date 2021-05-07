@@ -1,4 +1,4 @@
-import { Cartesian3, Matrix4 } from "cesium";
+import { Cartesian3 } from "cesium";
 
 const sizeOfUint32 = 4;
 const jsonChunkType = 0x4e4f534a;
@@ -58,39 +58,6 @@ function readHeader(glb: Buffer, byteOffset: number, count: number): number[] {
     header.push(glb.readUInt32LE(byteOffset + i * sizeOfUint32));
   }
   return header;
-}
-
-export function forEachVertexInMesh(
-  mesh: any,
-  gltf: Gltf,
-  iterFn: (vertex: Buffer) => void
-) {
-  const primitives = mesh.primitives;
-  const accessors = gltf.json.accessors;
-  const bufferViews = gltf.json.bufferViews;
-  if (
-    !Array.isArray(primitives) ||
-    !Array.isArray(accessors) ||
-    !Array.isArray(bufferViews)
-  ) {
-    return;
-  }
-
-  primitives.forEach((primitive) => {
-    const accessor = accessors[primitive.attributes.POSITION];
-    const bufferView = bufferViews[accessor.bufferView];
-    const buffer = gltf.buffers[bufferView.buffer];
-    const view = buffer.slice(
-      bufferView.byteOffset,
-      bufferView.byteOffset + bufferView.byteLength
-    );
-    const byteStride = bufferView.byteStride ?? 3 * sizeOfUint32;
-    for (let i = 0; i < accessor.count; i++) {
-      const pos = accessor.byteOffset + i * byteStride;
-      const vertex = view.slice(pos, pos + 12);
-      iterFn(vertex);
-    }
-  });
 }
 
 /**

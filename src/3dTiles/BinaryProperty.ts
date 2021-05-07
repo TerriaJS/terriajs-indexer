@@ -46,7 +46,7 @@ const ClassTypes = {
 
 const binaryPropertyTypes: string[] = Object.keys(ComponentsPerAttribute);
 
-export function parseBinaryProperty(json: any): BinaryProperty {
+export function parse(json: any): BinaryProperty {
   assertObject(json, "Object");
   assertNumber(json.byteOffset, "byteOffset");
   const type = parseBinaryPropertyType(json.type);
@@ -73,21 +73,21 @@ function parseComponentType(json: any): number {
   return json;
 }
 
-export function readPropertyValuesFromBinaryBatchTable(
+export function read(
   binaryProperty: BinaryProperty,
   binaryBody: Uint8Array,
-  length: number
+  batchLength: number
 ) {
   const componentsPerAttribute = ComponentsPerAttribute[binaryProperty.type];
   const typedArray = (ComponentDatatype as any).createArrayBufferView(
     binaryProperty.componentType,
     binaryBody.buffer,
     binaryBody.byteOffset + binaryProperty.byteOffset,
-    componentsPerAttribute * length
+    componentsPerAttribute * batchLength
   );
   const classType = ClassTypes[binaryProperty.type];
   const values: any[] = [];
-  for (let i = 0; i < length; i++) {
+  for (let i = 0; i < batchLength; i++) {
     if (classType === undefined) values.push(typedArray[i]);
     else values.push(classType.unpack(typedArray, i * componentsPerAttribute));
   }

@@ -13,7 +13,7 @@ type Tile = {
 
 export function forEachTile(
   tileset: Tileset,
-  iterFn: (value: { tile: Tile; finalTransform: Matrix4 }) => void
+  iterFn: (value: { tile: Tile; computedTransform: Matrix4 }) => void
 ) {
   const root = tileset.root;
   if (root === undefined) {
@@ -21,7 +21,7 @@ export function forEachTile(
   }
 
   const iterTile = (tile: Tile, parentTransform: Matrix4) => {
-    const finalTransform =
+    const computedTransform =
       tile.transform !== undefined
         ? Matrix4.multiply(
             parentTransform,
@@ -29,13 +29,18 @@ export function forEachTile(
             new Matrix4()
           )
         : parentTransform;
-    iterFn({ tile, finalTransform });
+    iterFn({ tile, computedTransform });
     if (Array.isArray(tile.children)) {
-      tile.children.forEach((child) => iterTile(child, finalTransform));
+      tile.children.forEach((child) => iterTile(child, computedTransform));
     }
   };
 
   iterTile(root, Matrix4.IDENTITY.clone());
+}
+
+export function uri(tile: Tile) {
+  // older formats use url
+  return tile.content?.uri ?? tile.content?.url;
 }
 
 export function toZUpTransform(tileset: Tileset) {

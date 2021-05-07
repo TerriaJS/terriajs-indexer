@@ -1,8 +1,15 @@
 // See: https://github.com/CesiumGS/3d-tiles/blob/master/specification/TileFormats/Batched3DModel/README.md#feature-table
 
+import * as binaryProperty from "./BinaryProperty";
+
 export type FeatureTable = {
-  json: any;
-  binary: Buffer;
+  jsonFeatureTable: any;
+  binaryFeatureTable: Buffer;
+};
+
+export type BatchTable = {
+  jsonBatchTable: any;
+  binaryBatchTable: Buffer;
 };
 
 export function getGlb(b3dm: Buffer): Buffer {
@@ -15,14 +22,14 @@ export function getGlb(b3dm: Buffer): Buffer {
   return b3dm.subarray(glbStart);
 }
 
-export function getFeatureTableJSON(b3dm: Buffer): any {
+export function getJSONFeatureTable(b3dm: Buffer): any {
   const start = getBodyStart();
   const end = start + getFeatureTableJSONByteLength(b3dm);
   const buf = b3dm.subarray(start, end);
   return JSON.parse(buf.toString());
 }
 
-export function getFeatureTableBinary(b3dm: Buffer): Buffer {
+export function getBinaryFeatureTable(b3dm: Buffer): Buffer {
   const start = getBodyStart() + getFeatureTableJSONByteLength(b3dm);
   const end = start + getFeatureTableBinaryByteLength(b3dm);
   return b3dm.subarray(start, end);
@@ -30,9 +37,60 @@ export function getFeatureTableBinary(b3dm: Buffer): Buffer {
 
 export function getFeatureTable(b3dm: Buffer): FeatureTable {
   return {
-    json: getFeatureTableJSON(b3dm),
-    binary: getFeatureTableBinary(b3dm),
+    jsonFeatureTable: getJSONFeatureTable(b3dm),
+    binaryFeatureTable: getBinaryFeatureTable(b3dm),
   };
+}
+
+export function getJSONBatchTable(b3dm: Buffer): any {
+  const start =
+    getBodyStart() +
+    getFeatureTableJSONByteLength(b3dm) +
+    getFeatureTableBinaryByteLength(b3dm);
+  const end = start + getBatchTableJSONByteLength(b3dm);
+  const json = JSON.parse(b3dm.slice(start, end).toString());
+  return json;
+}
+
+export function getBinaryBatchTable(b3dm: Buffer): Buffer {
+  const start =
+    getBodyStart() +
+    getFeatureTableJSONByteLength(b3dm) +
+    getFeatureTableBinaryByteLength(b3dm) +
+    getBatchTableJSONByteLength(b3dm);
+  const end = start + getBatchTableBinaryByteLength(b3dm);
+  const binaryBuffer = b3dm.slice(start, end);
+  return binaryBuffer;
+}
+
+export function getBatchTable(b3dm: Buffer): BatchTable {
+  return {
+    jsonBatchTable: getJSONBatchTable(b3dm),
+    binaryBatchTable: getBinaryBatchTable(b3dm),
+  };
+}
+
+export function getBatchTableProperties(
+  batchTable: BatchTable,
+  batchLength: number
+): Record<string, any[]> {
+  const properties: Record<string, any[]> = {};
+  Object.entries(batchTable.jsonBatchTable).forEach(([name, entry]) => {
+    if (Array.isArray(entry)) {
+      // entry is an array of values one for each batchId
+      properties[name] = entry;
+    } else {
+      // entry points to a buffer which we need to parse as an array
+      const propertyReference = binaryProperty.parse(entry);
+      const property = binaryProperty.read(
+        propertyReference,
+        batchTable.binaryBatchTable,
+        batchLength
+      );
+      properties[name] = property;
+    }
+  });
+  return properties;
 }
 
 export function getFeatureTableGlobalProperty(
@@ -41,7 +99,7 @@ export function getFeatureTableGlobalProperty(
   componentSize: number,
   componentLength: number
 ): any {
-  const jsonValue = featureTable.json[name];
+  const jsonValue = featureTable.jsonFeatureTable[name];
   if (jsonValue === undefined) {
     return;
   }
@@ -49,7 +107,7 @@ export function getFeatureTableGlobalProperty(
   const valueOrBuffer =
     jsonValue.byteOffset === undefined
       ? jsonValue
-      : featureTable.binary.subarray(
+      : featureTable.binaryFeatureTable.subarray(
           jsonValue.byteOffset,
           jsonValue.byteOffset + componentSize * componentLength
         );

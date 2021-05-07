@@ -17,10 +17,10 @@ export type PositionProperties = {
   height?: string;
 };
 
-export type FeatureCoordinate = {
+export type FeaturePosition = {
   latitude: number; // in degrees
   longitude: number; // in degrees
-  height: number;
+  height: number; // feature height in metres
 };
 
 export function parseIndexesConfig(json: any): IndexesConfig {
