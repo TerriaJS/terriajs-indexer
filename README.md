@@ -51,10 +51,7 @@ This generates an index in the given output directory. Check the `indexRoot.json
       - Optional
       - Name of the property to be used as height of the feature
 
-    If not provided, we use the latitude,
-    longitude & radius of the leaf tile containing the feature as its
-    position. This works, but sometimes we wont be able to zoom close enough to
-    the feature and the highlight will be difficult to spot.
+    If not provided, we autocompute the latitude, longitude & height of the feature from its vertices
 
 - `indexes: Record<string, IndexConfig>`
   - Required
