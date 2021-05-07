@@ -68,14 +68,3 @@ The configuration for an individual properties index.
   - The type of the index.
   
 
-## Dumping 3d tiles properites as CSV
-
-You can also dump all the tileset properties as a CSV file. This might be useful for debugging.
-
-```
-$ ts-node src/3dTiles/dumpCsv.ts </path/to/tileset.json> </path/to/output.csv>
-```
-
-Script parameters:
-  1) Path to `tileset.json`
-  2) Output csv file
