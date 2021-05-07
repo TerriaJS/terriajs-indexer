@@ -1,11 +1,14 @@
-import { Matrix4 } from "cesium";
+import { Cartesian3, Cartographic, Matrix4, Rectangle } from "cesium";
 import * as fse from "fs-extra";
 import * as path from "path";
+import * as b3dms from "./b3dms";
 import {
   parseBinaryProperty,
   readPropertyValuesFromBinaryBatchTable,
 } from "./BinaryProperty";
-import getTilePosition, { TilePosition } from "./getTilePosition";
+import * as gltfs from "./gltfs";
+import { Gltf } from "./gltfs";
+import * as tiles from "./tiles";
 
 /**
  * The value returned by tilesetFeaturesIterator
@@ -13,7 +16,7 @@ import getTilePosition, { TilePosition } from "./getTilePosition";
 export type Value = {
   b3dmPath: string; // Path of the b3dm file relative to tileset root directory
   tile: any; // Tile object
-  tilePosition: TilePosition; // The lat,lon,radius of the tile containing the feature
+  featurePosition: Cartographic; // The lat,lon,radius of the tile containing the feature
   properties: Record<string, string | number>; // Properties of the feature
 };
 
@@ -69,7 +72,7 @@ function readBatchTableBinaryByteLength(b3dmBuffer: Buffer): number {
 function* tileFeaturesIterator(
   tile: any,
   tilesetDir: string,
-  tilePosition: TilePosition
+  modelMatrixForNode: (rtcTransform: Matrix4, nodeMatrix: Matrix4) => Matrix4
 ) {
   const uri = tile.content?.uri || tile.content?.url;
   if (typeof uri !== "string") {
@@ -77,9 +80,9 @@ function* tileFeaturesIterator(
   }
   const b3dmPath = path.join(tilesetDir, uri);
   const b3dmBuffer = fse.readFileSync(b3dmPath);
-  const featureTable = JSON.parse(readFeatureTable(b3dmBuffer).toString());
+  const featureTable = b3dms.getFeatureTable(b3dmBuffer);
 
-  const batchLength = featureTable.BATCH_LENGTH;
+  const batchLength = featureTable.json.BATCH_LENGTH;
   if (typeof batchLength !== "number") {
     console.error("Missing or invalid batchLength: ${batchLength}");
     return;
@@ -109,6 +112,21 @@ function* tileFeaturesIterator(
     {}
   );
 
+  let featurePositions: Cartographic[] = [];
+  const gltf = gltfs.parseGlb(b3dms.getGlb(b3dmBuffer));
+
+  if (gltf !== undefined) {
+    // TODO: test with a RTC_CENTER tileset
+    const b3dmRtcCenter = b3dms.readRtcCenter(featureTable);
+    const rtcCenter = b3dmRtcCenter ?? gltf.json.extensions?.CESIUM_RTC?.center;
+    const rtcTransform = rtcCenter
+      ? Matrix4.fromTranslation(Cartesian3.fromArray(rtcCenter))
+      : Matrix4.IDENTITY.clone();
+    const _modelMatrixForNode = (nodeMatrix: Matrix4) =>
+      modelMatrixForNode(rtcTransform, nodeMatrix);
+    featurePositions = computeFeaturePositions(gltf, _modelMatrixForNode) ?? [];
+  }
+
   for (let batchId = 0; batchId < batchLength; batchId++) {
     const properties = Object.entries(batchTable).reduce(
       (acc: any, [key, vals]) => {
@@ -117,11 +135,12 @@ function* tileFeaturesIterator(
       },
       {}
     );
+    const featurePosition = featurePositions[batchId];
     yield {
       b3dmPath,
       properties,
       tile,
-      tilePosition,
+      featurePosition,
     };
   }
 }
@@ -137,21 +156,35 @@ function* tileFeaturesIterator(
 function* tileAndSubtreeFeaturesIterator(
   tile: any,
   tilesetDir: string,
-  parentTransform: Matrix4
+  parentTransform: Matrix4,
+  toZUpTransform: Matrix4
 ): Generator<Value> {
   const tileTransform =
     tile.transform !== undefined
       ? Matrix4.unpack(tile.transform)
       : Matrix4.clone(Matrix4.IDENTITY);
 
-  const transform = Matrix4.multiply(
+  const transform = Matrix4.multiplyTransformation(
     parentTransform,
     tileTransform,
     new Matrix4()
   );
-  const tilePosition = getTilePosition(tile, transform);
 
-  for (const row of tileFeaturesIterator(tile, tilesetDir, tilePosition)) {
+  const modelMatrixForNode = (rtcTransform: Matrix4, nodeMatrix: Matrix4) => {
+    // modelMatrix = transform * rtcTransform * toZUpTransform * nodeMatrix
+    const modelMatrix = Matrix4.IDENTITY.clone();
+    Matrix4.multiplyTransformation(modelMatrix, transform, modelMatrix);
+    Matrix4.multiplyTransformation(modelMatrix, rtcTransform, modelMatrix);
+    Matrix4.multiplyTransformation(modelMatrix, toZUpTransform, modelMatrix);
+    Matrix4.multiplyTransformation(modelMatrix, nodeMatrix, modelMatrix);
+    return modelMatrix;
+  };
+
+  for (const row of tileFeaturesIterator(
+    tile,
+    tilesetDir,
+    modelMatrixForNode
+  )) {
     yield row;
   }
 
@@ -160,7 +193,8 @@ function* tileAndSubtreeFeaturesIterator(
       for (const row of tileAndSubtreeFeaturesIterator(
         child,
         tilesetDir,
-        transform
+        transform,
+        toZUpTransform
       )) {
         yield row;
       }
@@ -182,15 +216,81 @@ export default function* tilesetFeaturesIterator(
     return;
   }
 
-  const rootTransform = tileset.root.transform
-    ? Matrix4.unpack(tileset.root.transform)
-    : Matrix4.clone(Matrix4.IDENTITY);
+  const toZUpTransform = tiles.toZUpTransform(tileset);
 
   for (const entry of tileAndSubtreeFeaturesIterator(
     tileset.root,
     tilesetDir,
-    Matrix4.IDENTITY.clone()
+    Matrix4.IDENTITY.clone(),
+    toZUpTransform
   )) {
     yield entry;
   }
+}
+
+function computeFeaturePositions(
+  gltf: Gltf,
+  modelMatrixForNode: (nodeMatrix: Matrix4) => Matrix4
+) {
+  const nodes = gltf?.json.nodes;
+  const meshes = gltf?.json.meshes;
+  const accessors = gltf?.json.accessors;
+  const bufferViews = gltf?.json.bufferViews;
+
+  if (
+    !Array.isArray(nodes) ||
+    !Array.isArray(meshes) ||
+    !Array.isArray(accessors) ||
+    !Array.isArray(bufferViews)
+  ) {
+    return;
+  }
+
+  const batchIdCoordinates: Cartographic[][] = [];
+
+  nodes.forEach((node) => {
+    const mesh = meshes[node.mesh];
+    const primitives = mesh.primitives;
+    const nodeMatrix = Array.isArray(node.matrix)
+      ? Matrix4.fromColumnMajorArray(node.matrix)
+      : Matrix4.IDENTITY.clone();
+    const modelMatrix = modelMatrixForNode(nodeMatrix);
+
+    primitives.forEach((primitive: any) => {
+      const attributes = primitive.attributes;
+      const _BATCHID = attributes._BATCHID;
+      const POSITION = attributes.POSITION;
+      if (_BATCHID === undefined || POSITION === undefined) {
+        return;
+      }
+
+      const count = accessors[_BATCHID].count;
+      for (let i = 0; i < count; i++) {
+        const [batchId] = gltfs.readValueAt(gltf, _BATCHID, i);
+        const [x, y, z] = gltfs.readValueAt(gltf, POSITION, i);
+        const localPosition = new Cartesian3(x, y, z);
+        const worldPosition = Matrix4.multiplyByPoint(
+          modelMatrix,
+          localPosition,
+          new Cartesian3()
+        );
+        const cartographic = Cartographic.fromCartesian(worldPosition);
+        batchIdCoordinates[batchId] = batchIdCoordinates[batchId] ?? [];
+        batchIdCoordinates[batchId].push(cartographic);
+      }
+    });
+  });
+
+  const featurePositions = batchIdCoordinates.map((cooridnates) => {
+    const heights = cooridnates.map((carto) => carto.height);
+    const maxHeight = Math.max(...heights);
+    const minHeight = Math.min(...heights);
+    const featureHeightAboveGround = maxHeight - Math.max(0, minHeight);
+    const rectangle = Rectangle.fromCartographicArray(cooridnates);
+    const coordinate = Rectangle.center(rectangle);
+    coordinate.height = featureHeightAboveGround;
+    return coordinate;
+  });
+
+  return featurePositions;
 }

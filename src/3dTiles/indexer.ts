@@ -6,10 +6,11 @@ import {
   IndexesConfig,
   parseIndexesConfig,
   PositionProperties,
-  ZoomTarget,
+  FeatureCoordinate,
 } from "../Config";
 import { createIndexBuilder, IndexBuilder } from "../IndexBuilder";
 import tilesetFeaturesIterator from "./tilesetFeaturesIterator";
+import { Math as CesiumMath } from "cesium";
 
 const USAGE =
   "USAGE: index.ts <tileset.json file> <config.json file> <index output directory>";
@@ -39,19 +40,31 @@ function index3dTiles(
   const idProperty = indexesConfig.idProperty;
   const uniqueFeatures: Record<
     string,
-    { position: ZoomTarget; properties: any }
+    { position: FeatureCoordinate; properties: any }
   > = {};
 
   let featuresRead = 0;
   for (const entry of tilesetFeaturesIterator(tileset, tilesetDir)) {
-    const { tilePosition, properties } = entry;
-    const position = getZoomTarget(
+    const { featurePosition, properties } = entry;
+    const position = getFeatureCoordinates(
       indexesConfig.positionProperties,
       properties,
-      tilePosition
+      {
+        latitude: CesiumMath.toDegrees(featurePosition.latitude),
+        longitude: CesiumMath.toDegrees(featurePosition.longitude),
+        height: featurePosition.height,
+      }
     );
+    // limit the number of decimal places to reduce the output file size
+    position.latitude = roundToNDecimalPlaces(position.latitude, 5);
+    position.longitude = roundToNDecimalPlaces(position.longitude, 5);
+    position.height = roundToNDecimalPlaces(position.height, 3);
+
     const idValue = properties[idProperty];
-    uniqueFeatures[idValue] = { position, properties };
+    uniqueFeatures[idValue] = {
+      position,
+      properties,
+    };
 
     featuresRead += 1;
     logOnSameLine(`Features read: ${featuresRead}`);
@@ -63,7 +76,10 @@ function index3dTiles(
   const resultsData: any[] = [];
   Object.entries(uniqueFeatures).forEach(
     ([idValue, { position, properties }]) => {
-      const len = resultsData.push({ [idProperty]: idValue, ...position });
+      const len = resultsData.push({
+        [idProperty]: idValue,
+        ...position,
+      });
       const dataRowId = len - 1;
       indexBuilders.forEach((b) =>
         b.addIndexValue(dataRowId, properties[b.property])
@@ -84,11 +100,11 @@ function index3dTiles(
   console.log("Done.");
 }
 
-function getZoomTarget(
+function getFeatureCoordinates(
   positionProperties: PositionProperties | undefined,
   properties: Record<string, any>,
-  defaults: ZoomTarget
-): ZoomTarget {
+  defaults: FeatureCoordinate
+): FeatureCoordinate {
   const position = { ...defaults };
   if (positionProperties?.latitude && properties[positionProperties.latitude])
     position.latitude = properties[positionProperties.latitude];
@@ -97,6 +113,12 @@ function getZoomTarget(
   if (positionProperties?.height && properties[positionProperties.height])
     position.height = properties[positionProperties.height];
   return position;
+}
+
+function roundToNDecimalPlaces(value: number, n: number): number {
+  const multiplier = 10 ** n;
+  const roundedValue = Math.round(value * multiplier) / multiplier;
+  return roundedValue;
 }
 
 /**

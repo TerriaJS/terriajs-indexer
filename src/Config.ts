@@ -17,11 +17,10 @@ export type PositionProperties = {
   height?: string;
 };
 
-export type ZoomTarget = {
-  latitude: number;
-  longitude: number;
-  height?: number;
-  radius?: number;
+export type FeatureCoordinate = {
+  latitude: number; // in degrees
+  longitude: number; // in degrees
+  height: number;
 };
 
 export function parseIndexesConfig(json: any): IndexesConfig {
