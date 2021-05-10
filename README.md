@@ -40,7 +40,7 @@ This generates an index in the given output directory. Check the `indexRoot.json
     configuration](#index-configuration) as its value. Only the properties
     specified in this object will be indexed. 
     
-    The automatically computed height of features is can be indexed by providing a configuration like:
+    To index the automatically computed feature heights, use a configuration like:
     ```
      "indexes": {"height": {"type": "numeric"}}
     ```
