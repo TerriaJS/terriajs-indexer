@@ -7,12 +7,7 @@ import {
 } from "cesium";
 import * as fse from "fs-extra";
 import * as path from "path";
-import {
-  FeaturePosition,
-  IndexesConfig,
-  parseIndexesConfig,
-  PositionProperties,
-} from "../Config";
+import { IndexesConfig, parseIndexesConfig } from "../Config";
 import { Index, IndexRoot } from "../Index";
 import { createIndexBuilder, IndexBuilder } from "../IndexBuilder";
 import writeCsv from "../writeCsv";
@@ -24,6 +19,10 @@ import * as tiles from "./tiles";
 
 const USAGE =
   "USAGE: index.ts <tileset.json file> <config.json file> <index output directory>";
+
+// The name used for the computed feature height. Use this name in the index configuration to
+// index the computed height
+const computedHeightPropertyName = "height";
 
 /**
  * Generate an index for the given tileset.
@@ -54,14 +53,30 @@ function index3dTileset(
   console.log("Building indexes...");
   const resultsData: any[] = [];
   Object.entries(features).forEach(([idValue, { position, properties }]) => {
+    const positionProperties = {
+      // rounding to fewer decimal places significantly reduces the size of resultData file
+      latitude: roundToNDecimalPlaces(
+        CesiumMath.toDegrees(position.latitude),
+        5
+      ),
+      longitude: roundToNDecimalPlaces(
+        CesiumMath.toDegrees(position.longitude),
+        5
+      ),
+      height: roundToNDecimalPlaces(position.height, 3),
+    };
     const len = resultsData.push({
       [indexesConfig.idProperty]: idValue,
-      ...position,
+      ...positionProperties,
     });
     const dataRowId = len - 1;
-    indexBuilders.forEach((b) =>
-      b.addIndexValue(dataRowId, properties[b.property])
-    );
+    indexBuilders.forEach((b) => {
+      if (b.property in properties) {
+        b.addIndexValue(dataRowId, properties[b.property]);
+      } else if (b.property === computedHeightPropertyName) {
+        b.addIndexValue(dataRowId, positionProperties.height);
+      }
+    });
   });
 
   console.log("Writing indexes...");
@@ -88,10 +103,10 @@ function readTilesetFeatures(
   tileset: any,
   tilesetDir: string,
   indexesConfig: IndexesConfig
-): Record<string, { properties: any; position: FeaturePosition }> {
+): Record<string, { properties: any; position: Cartographic }> {
   const uniqueFeatures: Record<
     string,
-    { position: FeaturePosition; properties: any }
+    { position: Cartographic; properties: any }
   > = {};
   let featuresRead = 0;
 
@@ -121,10 +136,9 @@ function readTilesetFeatures(
       batchLength
     );
 
-    const gltf = gltfs.parseGlb(b3dms.getGlb(b3dm));
     let computedFeaturePositions: Cartographic[] = [];
+    const gltf = gltfs.parseGlb(b3dms.getGlb(b3dm));
     if (gltf !== undefined) {
-      // TODO: test with a RTC_CENTER tileset
       const rtcTransform = getRtcTransform(featureTable, gltf);
       const toZUpTransform = tiles.toZUpTransform(tileset);
       computedFeaturePositions =
@@ -141,16 +155,7 @@ function readTilesetFeatures(
       Object.entries(batchTableProperties).forEach(([name, values]) => {
         batchProperties[name] = Array.isArray(values) ? values[batchId] : null;
       });
-      const position = getFeaturePosition(
-        indexesConfig.positionProperties,
-        batchProperties,
-        computedFeaturePositions[batchId]
-      );
-      // limit the number of decimal places to reduce the output file size
-      position.latitude = roundToNDecimalPlaces(position.latitude, 5);
-      position.longitude = roundToNDecimalPlaces(position.longitude, 5);
-      position.height = roundToNDecimalPlaces(position.height, 3);
-
+      const position = computedFeaturePositions[batchId];
       const idValue = batchProperties[indexesConfig.idProperty];
       uniqueFeatures[idValue] = {
         position,
@@ -257,25 +262,6 @@ function getRtcTransform(featureTable: FeatureTable, gltf: Gltf): Matrix4 {
     ? Matrix4.fromTranslation(Cartesian3.fromArray(rtcCenter))
     : Matrix4.IDENTITY.clone();
   return rtcTransform;
-}
-
-function getFeaturePosition(
-  positionProperties: PositionProperties | undefined,
-  properties: Record<string, any>,
-  defaults: Cartographic
-): FeaturePosition {
-  const position = {
-    latitude: CesiumMath.toDegrees(defaults.latitude),
-    longitude: CesiumMath.toDegrees(defaults.longitude),
-    height: defaults.height,
-  };
-  if (positionProperties?.latitude && properties[positionProperties.latitude])
-    position.latitude = properties[positionProperties.latitude];
-  if (positionProperties?.longitude && properties[positionProperties.longitude])
-    position.longitude = properties[positionProperties.longitude];
-  if (positionProperties?.height && properties[positionProperties.height])
-    position.height = properties[positionProperties.height];
-  return position;
 }
 
 function roundToNDecimalPlaces(value: number, n: number): number {

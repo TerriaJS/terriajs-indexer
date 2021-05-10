@@ -34,30 +34,16 @@ This generates an index in the given output directory. Check the `indexRoot.json
   - Required
   - Name of the property to be used as the ID for indexing
 
-- `positionProperties: PositionProperties`
-  - Optional
-  - We need to index the position of each feature so that we can zoom close to
-    it when the user selects it from the search results. `positionProperties`
-    allow specifying the name of the properites to be used as the latitude,
-    longitude or height of the feature. 
-    
-    - `latitude: string`
-      - Required
-      - Name of the property to be used as latitude of the feature
-    - `longitude: string`
-      - Required
-      - Name of the property to be used as longitude of the feature
-    - `height: string`
-      - Optional
-      - Name of the property to be used as height of the feature
-
-    If not provided, we autocompute the latitude, longitude & height of the feature from its vertices
-
 - `indexes: Record<string, IndexConfig>`
   - Required
   - An object with the property name as the key and an [index
     configuration](#index-configuration) as its value. Only the properties
-    specified in this object will be indexed.
+    specified in this object will be indexed. 
+    
+    The automatically computed height of features is can be indexed by providing a configuration like:
+    ```
+     "indexes": {"height": {"type": "numeric"}}
+    ```
 
 ### Index configuration
 
