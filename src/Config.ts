@@ -1,9 +1,8 @@
-import { assertObject, assertString, isJsonString } from "./Json";
 import { IndexType, indexTypes } from "./Index";
+import { assertObject, assertString } from "./Json";
 
 export type IndexesConfig = {
   idProperty: string;
-  positionProperties?: PositionProperties;
   indexes: Record<string, IndexConfig>;
 };
 
@@ -11,46 +10,14 @@ export type IndexConfig = {
   type: IndexType;
 };
 
-export type PositionProperties = {
-  latitude: string;
-  longitude: string;
-  height?: string;
-};
-
-export type ZoomTarget = {
-  latitude: number;
-  longitude: number;
-  height?: number;
-  radius?: number;
-};
-
 export function parseIndexesConfig(json: any): IndexesConfig {
   assertObject(json, "IndexesConfig");
   assertString(json.idProperty, "idProperty");
 
-  let positionProperties: PositionProperties | undefined;
-  try {
-    positionProperties = parsePositionProperties(json.positionProperties);
-  } catch (e) {
-    // ignore
-  }
-
   const indexes = parseIndexes(json.indexes);
   return {
     idProperty: json.idProperty,
-    positionProperties,
     indexes,
-  };
-}
-
-function parsePositionProperties(json: any): PositionProperties {
-  assertObject(json, "IndexesConfig.positionProperties");
-  assertString(json.latitude, "laitude");
-  assertString(json.longitude, "longitude");
-  return {
-    latitude: json.latitude,
-    longitude: json.longitude,
-    height: isJsonString(json.height) ? json.height : undefined,
   };
 }
 

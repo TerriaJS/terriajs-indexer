@@ -80,7 +80,9 @@ typings/
 
 # Nuxt.js build / generate output
 .nuxt
-dist
+
+# Because we are not publishing to npm for now we have to include dist files
+# dist
 
 # Gatsby files
 .cache/
