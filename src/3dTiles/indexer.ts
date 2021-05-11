@@ -303,10 +303,11 @@ function writeIndexRoot(indexRoot: IndexRoot, outDir: string) {
 }
 
 /**
- * Main
+ * Runs the indexer with the given arguments
+ * @params argv An argument array
  */
-function main() {
-  const [tilesetFile, indexConfigFile, outDir] = process.argv.slice(2);
+export default function runIndexer(argv: string[]) {
+  const [tilesetFile, indexConfigFile, outDir] = argv.slice(2);
   let tileset: any;
   let indexesConfig: IndexesConfig;
 
@@ -350,5 +351,3 @@ function logOnSameLine(message: string) {
   process.stdout.cursorTo(0);
   process.stdout.write(message);
 }
-
-main();

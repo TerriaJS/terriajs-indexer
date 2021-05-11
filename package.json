@@ -6,6 +6,15 @@
   "engines": {
     "node": ">=14.15.3"
   },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist build",
+    "ts-node": "ts-node"
+  },
+  "files": [
+    "/bin",
+    "/dist"
+  ],
   "dependencies": {
     "cesium": "^1.77.0",
     "fs-extra": "^9.0.1",

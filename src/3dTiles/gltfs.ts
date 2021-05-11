@@ -37,7 +37,7 @@ export function parseGlb(glb: Buffer): Gltf | undefined {
 }
 
 function parseGlbVersion2(glb: Buffer): Gltf {
-  const [_magic, _version, length] = readHeader(glb, 0, 12);
+  const length = readHeader(glb, 0, 12)[2];
   let byteOffset = 12;
   let json: any;
   let binaryBuffer: Buffer = Buffer.from([]);
