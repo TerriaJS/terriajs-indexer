@@ -11,6 +11,9 @@
     "clean": "rm -rf dist build",
     "ts-node": "ts-node"
   },
+  "bin": {
+    "index-3dtiles": "./bin/index-3dtiles"
+  },
   "files": [
     "/bin",
     "/dist"
