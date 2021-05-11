@@ -1,4 +1,3 @@
 #!/usr/bin/env node
 
-const runIndexer = require("../dist/tsc/3dTiles/indexer.js");
-runIndexer(process.argv);
+require("../dist/tsc/3dTiles/indexer.js");

@@ -10,7 +10,7 @@ const writeCsv_1 = tslib_1.__importDefault(require("../writeCsv"));
 const b3dms = tslib_1.__importStar(require("./b3dms"));
 const gltfs = tslib_1.__importStar(require("./gltfs"));
 const tiles = tslib_1.__importStar(require("./tiles"));
-const USAGE = "USAGE: index.ts <tileset.json file> <config.json file> <index output directory>";
+const USAGE = "USAGE: npx index-3dtiles <tileset.json file> <config.json file> <index output directory>";
 // The name used for the computed feature height. Use this name in the index configuration to
 // index the computed height
 const computedHeightPropertyName = "height";
@@ -224,10 +224,11 @@ function writeIndexRoot(indexRoot, outDir) {
         .write(JSON.stringify(indexRoot));
 }
 /**
- * Main
+ * Runs the indexer with the given arguments
+ * @params argv An argument array
  */
-function main() {
-    const [tilesetFile, indexConfigFile, outDir] = process.argv.slice(2);
+function runIndexer(argv) {
+    const [tilesetFile, indexConfigFile, outDir] = argv.slice(2);
     let tileset;
     let indexesConfig;
     try {
@@ -255,6 +256,7 @@ function main() {
     const tilesetDir = path.dirname(tilesetFile);
     index3dTileset(tileset, tilesetDir, indexesConfig, outDir);
 }
+exports.default = runIndexer;
 function printUsageAndExit() {
     console.error(`\n${USAGE}\n`);
     process.exit(1);
@@ -265,5 +267,6 @@ function logOnSameLine(message) {
     process.stdout.cursorTo(0);
     process.stdout.write(message);
 }
-main();
+// TODO: do not run, instead just export this function
+runIndexer(process.argv);
 //# sourceMappingURL=indexer.js.map

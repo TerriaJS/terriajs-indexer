@@ -18,7 +18,7 @@ import { Gltf } from "./gltfs";
 import * as tiles from "./tiles";
 
 const USAGE =
-  "USAGE: index.ts <tileset.json file> <config.json file> <index output directory>";
+  "USAGE: npx index-3dtiles <tileset.json file> <config.json file> <index output directory>";
 
 // The name used for the computed feature height. Use this name in the index configuration to
 // index the computed height
@@ -351,3 +351,6 @@ function logOnSameLine(message: string) {
   process.stdout.cursorTo(0);
   process.stdout.write(message);
 }
+
+// TODO: do not run, instead just export this function
+runIndexer(process.argv);
