@@ -1,7 +1,14 @@
 import MiniSearch from "minisearch";
 import * as path from "path";
 import * as fse from "fs-extra";
-import { Index, NumericIndex, EnumIndex, TextIndex, EnumValue } from "./Index";
+import {
+  Index,
+  NumericIndex,
+  EnumIndex,
+  TextIndex,
+  EnumValue,
+  IndexRoot,
+} from "./Index";
 import writeCsv from "./writeCsv";
 import { IndexConfig } from "./Config";
 
@@ -19,8 +26,9 @@ export class NumericIndexBuilder {
 
   constructor(readonly property: string, readonly config: IndexConfig) {}
 
-  addIndexValue(dataRowId: number, value: any) {
-    if (typeof value === "number") {
+  addIndexValue(dataRowId: number, indexValue: any) {
+    const value = parseFloat(indexValue);
+    if (typeof value === "number" && isNaN(value) === false) {
       this.range = {
         min: this.range === undefined ? value : Math.min(value, this.range.min),
         max: this.range === undefined ? value : Math.max(value, this.range.max),
@@ -123,4 +131,39 @@ export function createIndexBuilder(
     case "enum":
       return new EnumIndexBuilder(property, indexConfig);
   }
+}
+
+/**
+ * Write indexes using the index builders and returns a `IndexRoot.indexes` map
+ */
+export function writeIndexes(
+  indexBuilders: IndexBuilder[],
+  outDir: string
+): Record<string, Index> {
+  return indexBuilders.reduce((indexes, b, fileId) => {
+    indexes[b.property] = b.writeIndex(fileId, outDir);
+    return indexes;
+  }, {} as Record<string, Index>);
+}
+
+/**
+ * Writes the data.csv file under `outDir` and returns its path.
+ */
+export function writeResultsData(
+  data: Record<string, any>[],
+  outDir: string
+): string {
+  const fileName = "resultsData.csv";
+  const filePath = path.join(outDir, fileName);
+  writeCsv(filePath, data);
+  return fileName;
+}
+
+/**
+ *  Writes the index root file under `outDir`.
+ */
+export function writeIndexRoot(indexRoot: IndexRoot, outDir: string) {
+  fse
+    .createWriteStream(path.join(outDir, "indexRoot.json"))
+    .write(JSON.stringify(indexRoot));
 }

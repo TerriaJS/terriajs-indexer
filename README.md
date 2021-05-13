@@ -8,16 +8,17 @@ It can currently index Cesium 3D tiles.
 
 # Installation
 
-```
+```bash
 yarn install
+yarn build
 ```
 
 # 3d Tiles
 
 ## Generating index for Cesium 3d Tiles
 
-```
-ts-node src/3dTiles/indexer.ts </path/to/tileset.json> </path/to/config.json> </path/to/output/directory>
+```bash
+./bin/index-3d-tiles </path/to/tileset.json> </path/to/config.json> </path/to/output/directory>
 ```
 
 Script parameters:
@@ -41,7 +42,7 @@ This generates an index in the given output directory. Check the `indexRoot.json
     specified in this object will be indexed. 
     
     To index the automatically computed feature heights, use a configuration like:
-    ```
+    ```json
      "indexes": {"height": {"type": "numeric"}}
     ```
 
@@ -54,3 +55,38 @@ The configuration for an individual properties index.
   - The type of the index.
   
 
+# KML-glTF files
+
+## Generating index for KML-glTF files
+
+The KML files should be formatted as given below:
+```xml
+<Placemark>
+  <name>Independence Hall</name>
+  <Model>
+    <Link><href>123.gltf</href></Link>
+    <Location>
+      <longitude>152.78600626966184</longitude>
+      <latitude>-27.54602173027532</latitude>
+      <altitude>78.79797821225782</altitude>
+    </Location>
+  </Model>
+  <ExtendedData>                       
+    <Data name="Address">
+      <value>500-36 CHESTNUT ST</value>
+    </Data>
+    <Data name="Parcel_ID">
+      <value>313762</value>
+    </Data>
+    <Data name="Is_City_Owned">
+      <value>True</value>
+    </Data>
+  </ExtendedData> 
+</Placemark>
+```
+
+```bash
+./bin/index-kml-gltf </path/to/kml-gltfs> </path/to/config.json> </path/to/output/directory>
+```
+
+The index configuration format is similar to configuration in the 3d-tiles example.

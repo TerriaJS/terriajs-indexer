@@ -20,7 +20,7 @@ export declare function readValueAt(gltf: Gltf, accessorId: number, n: number): 
 export declare function getCartesian3FromVertex(vertex: Buffer): Cartesian3;
 export declare function setVertexFromCartesian3(vertex: Buffer, position: Cartesian3): void;
 export declare function sizeOfComponentType(componentType: ComponentType): number;
-export declare function numberOfComponentsForType(accessorType: string): 1 | 3;
+export declare function numberOfComponentsForType(accessorType: string): 3 | 1;
 /**
  * Compute position for each feature from the vertex data
  *

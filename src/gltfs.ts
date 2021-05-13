@@ -1,7 +1,7 @@
 // Various utility functions for working with GLTFs
 // See: https://github.com/KhronosGroup/glTF/blob/master/specification/2.0/README.md
 
-import { Cartesian3 } from "cesium";
+import { Cartesian3, Cartographic, Matrix4, Rectangle } from "cesium";
 
 const sizeOfUint32 = 4;
 const jsonChunkType = 0x4e4f534a;
@@ -153,4 +153,93 @@ export function numberOfComponentsForType(accessorType: string) {
     default:
       throw new Error(`Unhandled accessor type: ${accessorType}`);
   }
+}
+
+/**
+ * Compute position for each feature from the vertex data
+ *
+ * @returns An array of Cartographic positions one for each feature. The array
+ * can be indexed by the batchId for the feature.
+ */
+export function computeFeaturePositionsFromGltfVertices(
+  gltf: Gltf,
+  tileTransform: Matrix4,
+  rtcTransform: Matrix4,
+  toZUpTransform: Matrix4
+): Cartographic[] | undefined {
+  const nodes = gltf?.json.nodes;
+  const meshes = gltf?.json.meshes;
+  const accessors = gltf?.json.accessors;
+  const bufferViews = gltf?.json.bufferViews;
+
+  if (
+    !Array.isArray(nodes) ||
+    !Array.isArray(meshes) ||
+    !Array.isArray(accessors) ||
+    !Array.isArray(bufferViews)
+  ) {
+    return;
+  }
+
+  const batchIdPositions: Cartographic[][] = [];
+
+  nodes.forEach((node) => {
+    const mesh = meshes[node.mesh];
+    const primitives = mesh.primitives;
+    const nodeMatrix = Array.isArray(node.matrix)
+      ? Matrix4.fromColumnMajorArray(node.matrix)
+      : Matrix4.IDENTITY.clone();
+
+    const modelMatrix = Matrix4.IDENTITY.clone();
+    Matrix4.multiplyTransformation(modelMatrix, tileTransform, modelMatrix);
+    Matrix4.multiplyTransformation(modelMatrix, rtcTransform, modelMatrix);
+    Matrix4.multiplyTransformation(modelMatrix, toZUpTransform, modelMatrix);
+    Matrix4.multiplyTransformation(modelMatrix, nodeMatrix, modelMatrix);
+
+    primitives.forEach((primitive: any) => {
+      const attributes = primitive.attributes;
+      const _BATCHID = attributes._BATCHID;
+      const POSITION = attributes.POSITION;
+      if (POSITION === undefined) {
+        return;
+      }
+
+      const count = accessors[POSITION].count;
+      for (let i = 0; i < count; i++) {
+        // If the gltf vertices are tagged with BATCHID, store the positions at
+        // the respective BATCHID. Otherwise store everything under a single
+        // BATCHID=0
+        const [batchId] =
+          _BATCHID !== undefined ? readValueAt(gltf, _BATCHID, i) : [0];
+        const [x, y, z] = readValueAt(gltf, POSITION, i);
+        const localPosition = new Cartesian3(x, y, z);
+        const worldPosition = Matrix4.multiplyByPoint(
+          modelMatrix,
+          localPosition,
+          new Cartesian3()
+        );
+        const cartographic = Cartographic.fromCartesian(worldPosition);
+        batchIdPositions[batchId] = batchIdPositions[batchId] ?? [];
+        if (cartographic !== undefined) {
+          batchIdPositions[batchId].push(cartographic);
+        }
+      }
+    });
+  });
+
+  const featurePositions = batchIdPositions.map((positions) => {
+    // From all the positions for the feature
+    // 1. compute a center point
+    // 2. compute the feature height
+    const heights = positions.map((carto) => carto.height);
+    const maxHeight = Math.max(...heights);
+    const minHeight = Math.min(...heights);
+    const featureHeight = maxHeight - minHeight;
+    const rectangle = Rectangle.fromCartographicArray(positions);
+    const position = Rectangle.center(rectangle);
+    position.height = featureHeight;
+    return position;
+  });
+
+  return featurePositions;
 }
