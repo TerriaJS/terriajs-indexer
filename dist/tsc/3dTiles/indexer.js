@@ -5,15 +5,14 @@ const cesium_1 = require("cesium");
 const fse = tslib_1.__importStar(require("fs-extra"));
 const path = tslib_1.__importStar(require("path"));
 const Config_1 = require("../Config");
+const constants_1 = require("../constants");
+const gltfs = tslib_1.__importStar(require("../gltfs"));
+const gltfs_1 = require("../gltfs");
 const IndexBuilder_1 = require("../IndexBuilder");
-const writeCsv_1 = tslib_1.__importDefault(require("../writeCsv"));
+const utils_1 = require("../utils");
 const b3dms = tslib_1.__importStar(require("./b3dms"));
-const gltfs = tslib_1.__importStar(require("./gltfs"));
 const tiles = tslib_1.__importStar(require("./tiles"));
 const USAGE = "USAGE: npx index-3dtiles <tileset.json file> <config.json file> <index output directory>";
-// The name used for the computed feature height. Use this name in the index configuration to
-// index the computed height
-const computedHeightPropertyName = "height";
 /**
  * Generate an index for the given tileset.
  *
@@ -36,9 +35,9 @@ function index3dTileset(tileset, tilesetDir, indexesConfig, outDir) {
     Object.entries(features).forEach(([idValue, { position, properties }]) => {
         const positionProperties = {
             // rounding to fewer decimal places significantly reduces the size of resultData file
-            latitude: roundToNDecimalPlaces(cesium_1.Math.toDegrees(position.latitude), 5),
-            longitude: roundToNDecimalPlaces(cesium_1.Math.toDegrees(position.longitude), 5),
-            height: roundToNDecimalPlaces(position.height, 3),
+            latitude: utils_1.roundToNDecimalPlaces(cesium_1.Math.toDegrees(position.latitude), 5),
+            longitude: utils_1.roundToNDecimalPlaces(cesium_1.Math.toDegrees(position.longitude), 5),
+            height: utils_1.roundToNDecimalPlaces(position.height, 3),
         };
         const len = resultsData.push(Object.assign({ [indexesConfig.idProperty]: idValue }, positionProperties));
         const dataRowId = len - 1;
@@ -46,20 +45,20 @@ function index3dTileset(tileset, tilesetDir, indexesConfig, outDir) {
             if (b.property in properties) {
                 b.addIndexValue(dataRowId, properties[b.property]);
             }
-            else if (b.property === computedHeightPropertyName) {
+            else if (b.property === constants_1.COMPUTED_HEIGHT_PROPERTY_NAME) {
                 b.addIndexValue(dataRowId, positionProperties.height);
             }
         });
     });
     console.log("Writing indexes...");
-    const indexes = writeIndexes(indexBuilders, outDir);
-    const resultsDataUrl = writeResultsData(resultsData, outDir);
+    const indexes = IndexBuilder_1.writeIndexes(indexBuilders, outDir);
+    const resultsDataUrl = IndexBuilder_1.writeResultsData(resultsData, outDir);
     const indexRoot = {
         resultsDataUrl,
         idProperty: indexesConfig.idProperty,
         indexes,
     };
-    writeIndexRoot(indexRoot, outDir);
+    IndexBuilder_1.writeIndexRoot(indexRoot, outDir);
     console.log(`Indexes written to ${outDir}/`);
     console.log("Done.");
 }
@@ -98,7 +97,7 @@ function readTilesetFeatures(tileset, tilesetDir, indexesConfig) {
         if (gltf !== undefined) {
             const rtcTransform = getRtcTransform(featureTable, gltf);
             const toZUpTransform = tiles.toZUpTransform(tileset);
-            computedFeaturePositions = (_a = computeFeaturePositionsFromGltfVertices(gltf, tileTransform, rtcTransform, toZUpTransform)) !== null && _a !== void 0 ? _a : [];
+            computedFeaturePositions = (_a = gltfs_1.computeFeaturePositionsFromGltfVertices(gltf, tileTransform, rtcTransform, toZUpTransform)) !== null && _a !== void 0 ? _a : [];
         }
         for (let batchId = 0; batchId < batchLength; batchId++) {
             const batchProperties = {};
@@ -112,72 +111,10 @@ function readTilesetFeatures(tileset, tilesetDir, indexesConfig) {
                 properties: batchProperties,
             };
             featuresRead += 1;
-            logOnSameLine(`Features read: ${featuresRead}`);
+            utils_1.logOnSameLine(`Features read: ${featuresRead}`);
         }
     });
     return uniqueFeatures;
-}
-/**
- * Compute position for each feature from the vertex data
- *
- */
-function computeFeaturePositionsFromGltfVertices(gltf, tileTransform, rtcTransform, toZUpTransform) {
-    const nodes = gltf === null || gltf === void 0 ? void 0 : gltf.json.nodes;
-    const meshes = gltf === null || gltf === void 0 ? void 0 : gltf.json.meshes;
-    const accessors = gltf === null || gltf === void 0 ? void 0 : gltf.json.accessors;
-    const bufferViews = gltf === null || gltf === void 0 ? void 0 : gltf.json.bufferViews;
-    if (!Array.isArray(nodes) ||
-        !Array.isArray(meshes) ||
-        !Array.isArray(accessors) ||
-        !Array.isArray(bufferViews)) {
-        return;
-    }
-    const batchIdPositions = [];
-    nodes.forEach((node) => {
-        const mesh = meshes[node.mesh];
-        const primitives = mesh.primitives;
-        const nodeMatrix = Array.isArray(node.matrix)
-            ? cesium_1.Matrix4.fromColumnMajorArray(node.matrix)
-            : cesium_1.Matrix4.IDENTITY.clone();
-        const modelMatrix = cesium_1.Matrix4.IDENTITY.clone();
-        cesium_1.Matrix4.multiplyTransformation(modelMatrix, tileTransform, modelMatrix);
-        cesium_1.Matrix4.multiplyTransformation(modelMatrix, rtcTransform, modelMatrix);
-        cesium_1.Matrix4.multiplyTransformation(modelMatrix, toZUpTransform, modelMatrix);
-        cesium_1.Matrix4.multiplyTransformation(modelMatrix, nodeMatrix, modelMatrix);
-        primitives.forEach((primitive) => {
-            var _a;
-            const attributes = primitive.attributes;
-            const _BATCHID = attributes._BATCHID;
-            const POSITION = attributes.POSITION;
-            if (_BATCHID === undefined || POSITION === undefined) {
-                return;
-            }
-            const count = accessors[_BATCHID].count;
-            for (let i = 0; i < count; i++) {
-                const [batchId] = gltfs.readValueAt(gltf, _BATCHID, i);
-                const [x, y, z] = gltfs.readValueAt(gltf, POSITION, i);
-                const localPosition = new cesium_1.Cartesian3(x, y, z);
-                const worldPosition = cesium_1.Matrix4.multiplyByPoint(modelMatrix, localPosition, new cesium_1.Cartesian3());
-                const cartographic = cesium_1.Cartographic.fromCartesian(worldPosition);
-                batchIdPositions[batchId] = (_a = batchIdPositions[batchId]) !== null && _a !== void 0 ? _a : [];
-                batchIdPositions[batchId].push(cartographic);
-            }
-        });
-    });
-    const featurePositions = batchIdPositions.map((positions) => {
-        // From all the positions for the feature
-        // 1. compute a center point
-        // 2. compute the feature height
-        const heights = positions.map((carto) => carto.height);
-        const maxHeight = Math.max(...heights);
-        const minHeight = Math.min(...heights);
-        const featureHeightAboveGround = maxHeight - Math.max(0, minHeight);
-        const rectangle = cesium_1.Rectangle.fromCartographicArray(positions);
-        const position = cesium_1.Rectangle.center(rectangle);
-        position.height = featureHeightAboveGround;
-        return position;
-    });
-    return featurePositions;
 }
 /**
  * Returns an RTC_CENTER or CESIUM_RTC transformation matrix which ever exists.
@@ -191,37 +128,6 @@ function getRtcTransform(featureTable, gltf) {
         ? cesium_1.Matrix4.fromTranslation(cesium_1.Cartesian3.fromArray(rtcCenter))
         : cesium_1.Matrix4.IDENTITY.clone();
     return rtcTransform;
-}
-function roundToNDecimalPlaces(value, n) {
-    const multiplier = Math.pow(10, n);
-    const roundedValue = Math.round(value * multiplier) / multiplier;
-    return roundedValue;
-}
-/**
- * Write indexes using the index builders and returns a `IndexRoot.indexes` map
- */
-function writeIndexes(indexBuilders, outDir) {
-    return indexBuilders.reduce((indexes, b, fileId) => {
-        indexes[b.property] = b.writeIndex(fileId, outDir);
-        return indexes;
-    }, {});
-}
-/**
- * Writes the data.csv file under `outDir` and returns its path.
- */
-function writeResultsData(data, outDir) {
-    const fileName = "resultsData.csv";
-    const filePath = path.join(outDir, fileName);
-    writeCsv_1.default(filePath, data);
-    return fileName;
-}
-/**
- *  Writes the index root file under `outDir`.
- */
-function writeIndexRoot(indexRoot, outDir) {
-    fse
-        .createWriteStream(path.join(outDir, "indexRoot.json"))
-        .write(JSON.stringify(indexRoot));
 }
 /**
  * Runs the indexer with the given arguments
@@ -237,7 +143,7 @@ function runIndexer(argv) {
     catch (e) {
         console.error(`Failed to read tileset file "${tilesetFile}"`);
         console.error(e);
-        printUsageAndExit();
+        utils_1.printUsageAndExit(USAGE);
     }
     try {
         indexesConfig = Config_1.parseIndexesConfig(JSON.parse(fse.readFileSync(indexConfigFile).toString()));
@@ -245,28 +151,18 @@ function runIndexer(argv) {
     catch (e) {
         console.error(`Failed to read index config file "${indexConfigFile}"`);
         console.error(e);
-        printUsageAndExit();
+        utils_1.printUsageAndExit(USAGE);
         return;
     }
     if (typeof outDir !== "string") {
         console.error(`Output directory not specified.`);
-        printUsageAndExit();
+        utils_1.printUsageAndExit(USAGE);
     }
     fse.mkdirpSync(outDir);
     const tilesetDir = path.dirname(tilesetFile);
     index3dTileset(tileset, tilesetDir, indexesConfig, outDir);
 }
 exports.default = runIndexer;
-function printUsageAndExit() {
-    console.error(`\n${USAGE}\n`);
-    process.exit(1);
-}
-function logOnSameLine(message) {
-    // clear line and move to first col
-    process.stdout.clearLine(0);
-    process.stdout.cursorTo(0);
-    process.stdout.write(message);
-}
 // TODO: do not run, instead just export this function
 runIndexer(process.argv);
 //# sourceMappingURL=indexer.js.map

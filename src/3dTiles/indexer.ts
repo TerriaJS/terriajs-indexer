@@ -1,28 +1,28 @@
-import {
-  Cartesian3,
-  Cartographic,
-  Math as CesiumMath,
-  Matrix4,
-  Rectangle,
-} from "cesium";
+import { Cartesian3, Cartographic, Math as CesiumMath, Matrix4 } from "cesium";
 import * as fse from "fs-extra";
 import * as path from "path";
 import { IndexesConfig, parseIndexesConfig } from "../Config";
-import { Index, IndexRoot } from "../Index";
-import { createIndexBuilder, IndexBuilder } from "../IndexBuilder";
-import writeCsv from "../writeCsv";
+import { COMPUTED_HEIGHT_PROPERTY_NAME } from "../constants";
+import * as gltfs from "../gltfs";
+import { computeFeaturePositionsFromGltfVertices, Gltf } from "../gltfs";
+import { IndexRoot } from "../Index";
+import {
+  createIndexBuilder,
+  writeIndexes,
+  writeIndexRoot,
+  writeResultsData,
+} from "../IndexBuilder";
+import {
+  logOnSameLine,
+  printUsageAndExit,
+  roundToNDecimalPlaces,
+} from "../utils";
 import * as b3dms from "./b3dms";
 import { FeatureTable } from "./b3dms";
-import * as gltfs from "./gltfs";
-import { Gltf } from "./gltfs";
 import * as tiles from "./tiles";
 
 const USAGE =
   "USAGE: npx index-3dtiles <tileset.json file> <config.json file> <index output directory>";
-
-// The name used for the computed feature height. Use this name in the index configuration to
-// index the computed height
-const computedHeightPropertyName = "height";
 
 /**
  * Generate an index for the given tileset.
@@ -73,7 +73,7 @@ function index3dTileset(
     indexBuilders.forEach((b) => {
       if (b.property in properties) {
         b.addIndexValue(dataRowId, properties[b.property]);
-      } else if (b.property === computedHeightPropertyName) {
+      } else if (b.property === COMPUTED_HEIGHT_PROPERTY_NAME) {
         b.addIndexValue(dataRowId, positionProperties.height);
       }
     });
@@ -171,87 +171,6 @@ function readTilesetFeatures(
 }
 
 /**
- * Compute position for each feature from the vertex data
- *
- */
-function computeFeaturePositionsFromGltfVertices(
-  gltf: Gltf,
-  tileTransform: Matrix4,
-  rtcTransform: Matrix4,
-  toZUpTransform: Matrix4
-): Cartographic[] | undefined {
-  const nodes = gltf?.json.nodes;
-  const meshes = gltf?.json.meshes;
-  const accessors = gltf?.json.accessors;
-  const bufferViews = gltf?.json.bufferViews;
-
-  if (
-    !Array.isArray(nodes) ||
-    !Array.isArray(meshes) ||
-    !Array.isArray(accessors) ||
-    !Array.isArray(bufferViews)
-  ) {
-    return;
-  }
-
-  const batchIdPositions: Cartographic[][] = [];
-
-  nodes.forEach((node) => {
-    const mesh = meshes[node.mesh];
-    const primitives = mesh.primitives;
-    const nodeMatrix = Array.isArray(node.matrix)
-      ? Matrix4.fromColumnMajorArray(node.matrix)
-      : Matrix4.IDENTITY.clone();
-
-    const modelMatrix = Matrix4.IDENTITY.clone();
-    Matrix4.multiplyTransformation(modelMatrix, tileTransform, modelMatrix);
-    Matrix4.multiplyTransformation(modelMatrix, rtcTransform, modelMatrix);
-    Matrix4.multiplyTransformation(modelMatrix, toZUpTransform, modelMatrix);
-    Matrix4.multiplyTransformation(modelMatrix, nodeMatrix, modelMatrix);
-
-    primitives.forEach((primitive: any) => {
-      const attributes = primitive.attributes;
-      const _BATCHID = attributes._BATCHID;
-      const POSITION = attributes.POSITION;
-      if (_BATCHID === undefined || POSITION === undefined) {
-        return;
-      }
-
-      const count = accessors[_BATCHID].count;
-      for (let i = 0; i < count; i++) {
-        const [batchId] = gltfs.readValueAt(gltf, _BATCHID, i);
-        const [x, y, z] = gltfs.readValueAt(gltf, POSITION, i);
-        const localPosition = new Cartesian3(x, y, z);
-        const worldPosition = Matrix4.multiplyByPoint(
-          modelMatrix,
-          localPosition,
-          new Cartesian3()
-        );
-        const cartographic = Cartographic.fromCartesian(worldPosition);
-        batchIdPositions[batchId] = batchIdPositions[batchId] ?? [];
-        batchIdPositions[batchId].push(cartographic);
-      }
-    });
-  });
-
-  const featurePositions = batchIdPositions.map((positions) => {
-    // From all the positions for the feature
-    // 1. compute a center point
-    // 2. compute the feature height
-    const heights = positions.map((carto) => carto.height);
-    const maxHeight = Math.max(...heights);
-    const minHeight = Math.min(...heights);
-    const featureHeightAboveGround = maxHeight - Math.max(0, minHeight);
-    const rectangle = Rectangle.fromCartographicArray(positions);
-    const position = Rectangle.center(rectangle);
-    position.height = featureHeightAboveGround;
-    return position;
-  });
-
-  return featurePositions;
-}
-
-/**
  * Returns an RTC_CENTER or CESIUM_RTC transformation matrix which ever exists.
  *
  */
@@ -262,44 +181,6 @@ function getRtcTransform(featureTable: FeatureTable, gltf: Gltf): Matrix4 {
     ? Matrix4.fromTranslation(Cartesian3.fromArray(rtcCenter))
     : Matrix4.IDENTITY.clone();
   return rtcTransform;
-}
-
-function roundToNDecimalPlaces(value: number, n: number): number {
-  const multiplier = 10 ** n;
-  const roundedValue = Math.round(value * multiplier) / multiplier;
-  return roundedValue;
-}
-
-/**
- * Write indexes using the index builders and returns a `IndexRoot.indexes` map
- */
-function writeIndexes(
-  indexBuilders: IndexBuilder[],
-  outDir: string
-): Record<string, Index> {
-  return indexBuilders.reduce((indexes, b, fileId) => {
-    indexes[b.property] = b.writeIndex(fileId, outDir);
-    return indexes;
-  }, {} as Record<string, Index>);
-}
-
-/**
- * Writes the data.csv file under `outDir` and returns its path.
- */
-function writeResultsData(data: Record<string, any>[], outDir: string): string {
-  const fileName = "resultsData.csv";
-  const filePath = path.join(outDir, fileName);
-  writeCsv(filePath, data);
-  return fileName;
-}
-
-/**
- *  Writes the index root file under `outDir`.
- */
-function writeIndexRoot(indexRoot: IndexRoot, outDir: string) {
-  fse
-    .createWriteStream(path.join(outDir, "indexRoot.json"))
-    .write(JSON.stringify(indexRoot));
 }
 
 /**
@@ -316,7 +197,7 @@ export default function runIndexer(argv: string[]) {
   } catch (e) {
     console.error(`Failed to read tileset file "${tilesetFile}"`);
     console.error(e);
-    printUsageAndExit();
+    printUsageAndExit(USAGE);
   }
 
   try {
@@ -326,30 +207,18 @@ export default function runIndexer(argv: string[]) {
   } catch (e) {
     console.error(`Failed to read index config file "${indexConfigFile}"`);
     console.error(e);
-    printUsageAndExit();
+    printUsageAndExit(USAGE);
     return;
   }
 
   if (typeof outDir !== "string") {
     console.error(`Output directory not specified.`);
-    printUsageAndExit();
+    printUsageAndExit(USAGE);
   }
 
   fse.mkdirpSync(outDir);
   const tilesetDir = path.dirname(tilesetFile);
   index3dTileset(tileset, tilesetDir, indexesConfig, outDir);
-}
-
-function printUsageAndExit() {
-  console.error(`\n${USAGE}\n`);
-  process.exit(1);
-}
-
-function logOnSameLine(message: string) {
-  // clear line and move to first col
-  process.stdout.clearLine(0);
-  process.stdout.cursorTo(0);
-  process.stdout.write(message);
 }
 
 // TODO: do not run, instead just export this function

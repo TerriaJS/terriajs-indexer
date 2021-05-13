@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createIndexBuilder = exports.EnumIndexBuilder = exports.TextIndexBuilder = exports.NumericIndexBuilder = void 0;
+exports.writeIndexRoot = exports.writeResultsData = exports.writeIndexes = exports.createIndexBuilder = exports.EnumIndexBuilder = exports.TextIndexBuilder = exports.NumericIndexBuilder = void 0;
 const tslib_1 = require("tslib");
 const minisearch_1 = tslib_1.__importDefault(require("minisearch"));
 const path = tslib_1.__importStar(require("path"));
@@ -12,8 +12,9 @@ class NumericIndexBuilder {
         this.config = config;
         this.idValuePairs = [];
     }
-    addIndexValue(dataRowId, value) {
-        if (typeof value === "number") {
+    addIndexValue(dataRowId, indexValue) {
+        const value = parseFloat(indexValue);
+        if (typeof value === "number" && isNaN(value) === false) {
             this.range = {
                 min: this.range === undefined ? value : Math.min(value, this.range.min),
                 max: this.range === undefined ? value : Math.max(value, this.range.max),
@@ -99,4 +100,33 @@ function createIndexBuilder(property, indexConfig) {
     }
 }
 exports.createIndexBuilder = createIndexBuilder;
+/**
+ * Write indexes using the index builders and returns a `IndexRoot.indexes` map
+ */
+function writeIndexes(indexBuilders, outDir) {
+    return indexBuilders.reduce((indexes, b, fileId) => {
+        indexes[b.property] = b.writeIndex(fileId, outDir);
+        return indexes;
+    }, {});
+}
+exports.writeIndexes = writeIndexes;
+/**
+ * Writes the data.csv file under `outDir` and returns its path.
+ */
+function writeResultsData(data, outDir) {
+    const fileName = "resultsData.csv";
+    const filePath = path.join(outDir, fileName);
+    writeCsv_1.default(filePath, data);
+    return fileName;
+}
+exports.writeResultsData = writeResultsData;
+/**
+ *  Writes the index root file under `outDir`.
+ */
+function writeIndexRoot(indexRoot, outDir) {
+    fse
+        .createWriteStream(path.join(outDir, "indexRoot.json"))
+        .write(JSON.stringify(indexRoot));
+}
+exports.writeIndexRoot = writeIndexRoot;
 //# sourceMappingURL=IndexBuilder.js.map
