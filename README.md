@@ -4,7 +4,10 @@
 
 A tool for generating search index for TerriaJS datasets. 
 
-It can currently index Cesium 3D tiles.
+Formats supported:
+ * Cesium 3D Tiles
+ * KML-glTFs
+
 
 # Installation
 
