@@ -12,7 +12,8 @@
     "ts-node": "ts-node"
   },
   "bin": {
-    "index-3dtiles": "./bin/index-3dtiles"
+    "index-3dtiles": "./bin/index-3dtiles",
+    "index-kml-gltf": "./bin/index-kml-gltf"
   },
   "files": [
     "/bin",
