@@ -110,62 +110,79 @@ function readTilesetFeatures(
   > = {};
   let featuresRead = 0;
 
-  // For each feature in each tile in tileset
-  // 1. read properties for the feature from the batch table
-  // 2. compute position of the feature from the vertex data
-  // Then generate a unique list of feature id -> {position, properties} value
-  tiles.forEachTile(tileset, ({ tile, computedTransform: tileTransform }) => {
-    const tileUri = tiles.uri(tile);
-    if (tileUri === undefined) {
-      return;
-    }
+  // The tileset can contain child tilesets. We add any child tilesets that we come
+  // across to this queue so that they will be processed sequentially.
+  const tilesetQueue = [tileset];
+  for (tileset of tilesetQueue) {
+    // For each feature in each tile in the tileset
+    // 1. read properties for the feature from the batch table
+    // 2. compute position of the feature from the vertex data
+    // Then generate a unique list of feature id -> {position, properties} value
+    tiles.forEachTile(tileset, ({ tile, computedTransform: tileTransform }) => {
+      const tileUri = tiles.uri(tile);
+      if (tileUri === undefined) {
+        return;
+      }
 
-    const b3dmPath = path.join(tilesetDir, tileUri);
-    const b3dm = fse.readFileSync(b3dmPath);
-    const featureTable = b3dms.getFeatureTable(b3dm);
-    const batchLength = featureTable.jsonFeatureTable.BATCH_LENGTH;
+      const contentPath = path.join(tilesetDir, tileUri);
+      if (contentPath.endsWith(".json")) {
+        // the content is another tileset json
+        // enqueue it so that it is processed at the end
+        const childTileset = JSON.parse(
+          fse.readFileSync(contentPath).toString()
+        );
+        tilesetQueue.push(childTileset);
+        return;
+      }
+      // content is most likely b3dm (TODO: handle other types gracefully)
+      const b3dm = fse.readFileSync(contentPath);
+      const featureTable = b3dms.getFeatureTable(b3dm);
+      const batchLength = featureTable.jsonFeatureTable.BATCH_LENGTH;
 
-    if (typeof batchLength !== "number") {
-      console.error(`Missing or invalid batchLength for tile ${tileUri}`);
-      return;
-    }
+      if (typeof batchLength !== "number") {
+        console.error(`Missing or invalid batchLength for tile ${tileUri}`);
+        return;
+      }
 
-    const batchTable = b3dms.getBatchTable(b3dm);
-    const batchTableProperties = b3dms.getBatchTableProperties(
-      batchTable,
-      batchLength
-    );
+      const batchTable = b3dms.getBatchTable(b3dm);
+      const batchTableProperties = b3dms.getBatchTableProperties(
+        batchTable,
+        batchLength
+      );
 
-    let computedFeaturePositions: Cartographic[] = [];
-    const gltf = gltfs.parseGlb(b3dms.getGlb(b3dm));
-    if (gltf !== undefined) {
-      const rtcTransform = getRtcTransform(featureTable, gltf);
-      const toZUpTransform = tiles.toZUpTransform(tileset);
-      computedFeaturePositions =
-        computeFeaturePositionsFromGltfVertices(
-          gltf,
-          tileTransform,
-          rtcTransform,
-          toZUpTransform
-        ) ?? [];
-    }
+      let computedFeaturePositions: Cartographic[] = [];
+      const gltf = gltfs.parseGlb(b3dms.getGlb(b3dm));
+      if (gltf !== undefined) {
+        const rtcTransform = getRtcTransform(featureTable, gltf);
+        const toZUpTransform = tiles.toZUpTransform(tileset);
+        computedFeaturePositions =
+          computeFeaturePositionsFromGltfVertices(
+            gltf,
+            tileTransform,
+            rtcTransform,
+            toZUpTransform
+          ) ?? [];
+      }
 
-    for (let batchId = 0; batchId < batchLength; batchId++) {
-      const batchProperties: Record<string, any> = {};
-      Object.entries(batchTableProperties).forEach(([name, values]) => {
-        batchProperties[name] = Array.isArray(values) ? values[batchId] : null;
-      });
-      const position = computedFeaturePositions[batchId];
-      const idValue = batchProperties[indexesConfig.idProperty];
-      uniqueFeatures[idValue] = {
-        position,
-        properties: batchProperties,
-      };
+      for (let batchId = 0; batchId < batchLength; batchId++) {
+        const batchProperties: Record<string, any> = {};
+        Object.entries(batchTableProperties).forEach(([name, values]) => {
+          batchProperties[name] = Array.isArray(values)
+            ? values[batchId]
+            : null;
+        });
+        const position = computedFeaturePositions[batchId];
+        const idValue = batchProperties[indexesConfig.idProperty];
+        uniqueFeatures[idValue] = {
+          position,
+          properties: batchProperties,
+        };
 
-      featuresRead += 1;
-      logOnSameLine(`Features read: ${featuresRead}`);
-    }
-  });
+        featuresRead += 1;
+        logOnSameLine(`Features read: ${featuresRead}`);
+      }
+    });
+  }
 
   return uniqueFeatures;
 }
