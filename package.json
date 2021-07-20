@@ -1,6 +1,6 @@
 {
   "name": "terriajs-indexer",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A tool for generating static search indexes for TerriaJS datasets.",
   "license": "Apache-2.0",
   "engines": {
