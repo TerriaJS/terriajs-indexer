@@ -1,24 +1,23 @@
-import { Cartesian3, Cartographic, Math as CesiumMath, Matrix4 } from "cesium";
+import { Cartographic, Math as CesiumMath } from "cesium";
 import * as fse from "fs-extra";
 import * as path from "path";
 import { IndexesConfig, parseIndexesConfig } from "../Config";
-import { COMPUTED_HEIGHT_PROPERTY_NAME } from "../constants";
-import * as gltfs from "../gltfs";
-import { computeFeaturePositionsFromGltfVertices, Gltf } from "../gltfs";
 import { IndexRoot } from "../Index";
 import {
   createIndexBuilder,
-  writeIndexes,
   writeIndexRoot,
+  writeIndexes,
   writeResultsData,
 } from "../IndexBuilder";
+import { COMPUTED_HEIGHT_PROPERTY_NAME } from "../constants";
+import * as gltfs from "../gltfs";
+import { computeFeaturePositionsFromGltfVertices } from "../gltfs";
 import {
   logOnSameLine,
   printUsageAndExit,
   roundToNDecimalPlaces,
 } from "../utils";
 import * as b3dms from "./b3dms";
-import { FeatureTable } from "./b3dms";
 import * as tiles from "./tiles";
 
 const USAGE =
@@ -36,7 +35,7 @@ const USAGE =
  * Because we uniquify the features, if there are 2 LOD tiles for the same feature
  * has different properties we only index the properties of the highest LOD tile.
  */
-function index3dTileset(
+async function index3dTileset(
   tileset: any,
   tilesetDir: string,
   indexesConfig: IndexesConfig,
@@ -46,7 +45,11 @@ function index3dTileset(
     indexesConfig.indexes
   ).map(([property, config]) => createIndexBuilder(property, config));
 
-  const features = readTilesetFeatures(tileset, tilesetDir, indexesConfig);
+  const features = await readTilesetFeatures(
+    tileset,
+    tilesetDir,
+    indexesConfig
+  );
   const featuresCount = Object.entries(features).length;
   console.log(`\nUnique features found: ${featuresCount}`);
 
@@ -99,11 +102,11 @@ function index3dTileset(
  * @param indexesConfig The indexes config object
  * @returns An object containing {properties,position} for each feature in the tilset. The object is keyed by the idProperty for the feature.
  */
-function readTilesetFeatures(
+async function readTilesetFeatures(
   tileset: any,
   tilesetDir: string,
   indexesConfig: IndexesConfig
-): Record<string, { properties: any; position: Cartographic }> {
+): Promise<Record<string, { properties: any; position: Cartographic }>> {
   const uniqueFeatures: Record<
     string,
     { position: Cartographic; properties: any }
@@ -113,98 +116,88 @@ function readTilesetFeatures(
   // The tileset can contain child tilesets. We add any child tilesets that we come
   // across to this queue so that they will be processed sequentially.
   const tilesetQueue = [tileset];
-  for (tileset of tilesetQueue) {
+  for await (tileset of tilesetQueue) {
     // For each feature in each tile in the tileset
     // 1. read properties for the feature from the batch table
     // 2. compute position of the feature from the vertex data
     // Then generate a unique list of feature id -> {position, properties} value
-    tiles.forEachTile(tileset, ({ tile, computedTransform: tileTransform }) => {
-      const tileUri = tiles.uri(tile);
-      if (tileUri === undefined) {
-        return;
-      }
+    const promise = tiles.forEachTile(
+      tileset,
+      async ({ tile, computedTransform: tileTransform }) => {
+        const tileUri = tiles.uri(tile);
+        if (tileUri === undefined) {
+          return;
+        }
 
-      const contentPath = path.join(tilesetDir, tileUri);
-      if (contentPath.endsWith(".json")) {
-        // the content is another tileset json
-        // enqueue it so that it is processed at the end
-        const childTileset = JSON.parse(
-          fse.readFileSync(contentPath).toString()
+        const contentPath = path.join(tilesetDir, tileUri);
+        if (contentPath.endsWith(".json")) {
+          // the content is another tileset json
+          // enqueue it so that it is processed at the end
+          const childTileset = JSON.parse(
+            fse.readFileSync(contentPath).toString()
+          );
+          tilesetQueue.push(childTileset);
+          return;
+        }
+        // content is most likely b3dm (TODO: handle other types gracefully)
+        const b3dm = fse.readFileSync(contentPath);
+        const featureTable = b3dms.getFeatureTable(b3dm);
+        const batchLength = featureTable.jsonFeatureTable.BATCH_LENGTH;
+
+        if (typeof batchLength !== "number") {
+          console.error(`Missing or invalid batchLength for tile ${tileUri}`);
+          return;
+        }
+
+        const batchTable = b3dms.getBatchTable(b3dm);
+        const batchTableProperties = b3dms.getBatchTableProperties(
+          batchTable,
+          batchLength
         );
-        tilesetQueue.push(childTileset);
-        return;
+
+        let computedFeaturePositions: Cartographic[] = [];
+        const gltf = await gltfs.parseGlb(b3dms.getGlb(b3dm));
+        if (gltf !== undefined) {
+          const toZUpTransform = tiles.toZUpTransform(tileset);
+          computedFeaturePositions =
+            computeFeaturePositionsFromGltfVertices(
+              gltf,
+              tileTransform,
+              toZUpTransform
+            ) ?? [];
+        }
+
+        for (let batchId = 0; batchId < batchLength; batchId++) {
+          const batchProperties: Record<string, any> = {};
+          Object.entries(batchTableProperties).forEach(([name, values]) => {
+            batchProperties[name] = Array.isArray(values)
+              ? values[batchId]
+              : null;
+          });
+          const position = computedFeaturePositions[batchId];
+          const idValue = batchProperties[indexesConfig.idProperty];
+          uniqueFeatures[idValue] = {
+            position,
+            properties: batchProperties,
+          };
+
+          featuresRead += 1;
+          logOnSameLine(`Features read: ${featuresRead}`);
+        }
       }
-      // content is most likely b3dm (TODO: handle other types gracefully)
-      const b3dm = fse.readFileSync(contentPath);
-      const featureTable = b3dms.getFeatureTable(b3dm);
-      const batchLength = featureTable.jsonFeatureTable.BATCH_LENGTH;
+    );
 
-      if (typeof batchLength !== "number") {
-        console.error(`Missing or invalid batchLength for tile ${tileUri}`);
-        return;
-      }
-
-      const batchTable = b3dms.getBatchTable(b3dm);
-      const batchTableProperties = b3dms.getBatchTableProperties(
-        batchTable,
-        batchLength
-      );
-
-      let computedFeaturePositions: Cartographic[] = [];
-      const gltf = gltfs.parseGlb(b3dms.getGlb(b3dm));
-      if (gltf !== undefined) {
-        const rtcTransform = getRtcTransform(featureTable, gltf);
-        const toZUpTransform = tiles.toZUpTransform(tileset);
-        computedFeaturePositions =
-          computeFeaturePositionsFromGltfVertices(
-            gltf,
-            tileTransform,
-            rtcTransform,
-            toZUpTransform
-          ) ?? [];
-      }
-
-      for (let batchId = 0; batchId < batchLength; batchId++) {
-        const batchProperties: Record<string, any> = {};
-        Object.entries(batchTableProperties).forEach(([name, values]) => {
-          batchProperties[name] = Array.isArray(values)
-            ? values[batchId]
-            : null;
-        });
-        const position = computedFeaturePositions[batchId];
-        const idValue = batchProperties[indexesConfig.idProperty];
-        uniqueFeatures[idValue] = {
-          position,
-          properties: batchProperties,
-        };
-
-        featuresRead += 1;
-        logOnSameLine(`Features read: ${featuresRead}`);
-      }
-    });
+    await promise;
   }
 
   return uniqueFeatures;
 }
 
 /**
- * Returns an RTC_CENTER or CESIUM_RTC transformation matrix which ever exists.
- *
- */
-function getRtcTransform(featureTable: FeatureTable, gltf: Gltf): Matrix4 {
-  const b3dmRtcCenter = b3dms.readRtcCenter(featureTable);
-  const rtcCenter = b3dmRtcCenter ?? gltf.json.extensions?.CESIUM_RTC?.center;
-  const rtcTransform = rtcCenter
-    ? Matrix4.fromTranslation(Cartesian3.fromArray(rtcCenter))
-    : Matrix4.IDENTITY.clone();
-  return rtcTransform;
-}
-
-/**
  * Runs the indexer with the given arguments
  * @params argv An argument array
  */
-export default function runIndexer(argv: string[]) {
+export default async function runIndexer(argv: string[]) {
   const [tilesetFile, indexConfigFile, outDir] = argv.slice(2);
   let tileset: any;
   let indexesConfig: IndexesConfig;
@@ -235,7 +228,7 @@ export default function runIndexer(argv: string[]) {
 
   fse.mkdirpSync(outDir);
   const tilesetDir = path.dirname(tilesetFile);
-  index3dTileset(tileset, tilesetDir, indexesConfig, outDir);
+  await index3dTileset(tileset, tilesetDir, indexesConfig, outDir);
 }
 
 // TODO: do not run, instead just export this function

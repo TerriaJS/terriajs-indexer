@@ -1,25 +1,25 @@
 // See https://cesium.com/blog/2020/04/09/kml-collada-metadata/ for supported KML format
+//
+// Note: kml indexer hasn't been fully tested since the migration to gltf-transform, so expect errors when using it.
+//       Just enough fixes have been made to make the typescript compiler happy.
+//
 
-import {
-  Axis,
-  Cartographic,
-  Math as CesiumMath,
-  Matrix4,
-  Transforms,
-} from "cesium";
+import { Document } from "@gltf-transform/core";
+import { Axis, Cartographic, Math as CesiumMath, Transforms } from "cesium";
 import * as fse from "fs-extra";
 import * as path from "path";
 import * as xml2json from "xml2json";
 import { IndexesConfig, parseIndexesConfig } from "../Config";
-import { COMPUTED_HEIGHT_PROPERTY_NAME } from "../constants";
-import { computeFeaturePositionsFromGltfVertices, Gltf } from "../gltfs";
 import { IndexRoot } from "../Index";
 import {
   createIndexBuilder,
-  writeIndexes,
   writeIndexRoot,
+  writeIndexes,
   writeResultsData,
 } from "../IndexBuilder";
+import { COMPUTED_HEIGHT_PROPERTY_NAME } from "../constants";
+import * as gltfs from "../gltfs";
+import { computeFeaturePositionsFromGltfVertices } from "../gltfs";
 import {
   logOnSameLine,
   printUsageAndExit,
@@ -96,7 +96,7 @@ function readModel(kml: Kml): Model | undefined {
 }
 
 function computeModelPosition(
-  gltf: Gltf,
+  gltf: Document,
   location: Model["location"]
 ): Cartographic | undefined {
   // Compute a lat, lon & feature height from the gltf vertices
@@ -112,30 +112,12 @@ function computeModelPosition(
   const modelPosition = computeFeaturePositionsFromGltfVertices(
     gltf,
     Transforms.eastNorthUpToFixedFrame(gltfPosition), // gltf local coords to globe coords
-    Matrix4.IDENTITY.clone(), // rtc transform - there is none
     (Axis as any).Y_UP_TO_Z_UP.clone() // default gltf axis to cesium axis
   )?.[0];
   return modelPosition;
 }
 
-function readGltf(gltfPath: string): Gltf {
-  const json = JSON.parse(fse.readFileSync(gltfPath).toString());
-  if (Array.isArray(json.buffers) === false) {
-    return { json, buffers: [] };
-  }
-
-  const buffers: Buffer[] = json.buffers.map(
-    ({ uri }: { uri: string }): Buffer => {
-      const bufferPath = path.resolve(path.dirname(gltfPath), uri);
-      const buffer = fse.readFileSync(bufferPath);
-      return buffer;
-    }
-  );
-
-  return { json, buffers };
-}
-
-function indexKmlFiles(
+async function indexKmlFiles(
   kmlDir: string,
   kmlFiles: string[],
   indexesConfig: IndexesConfig,
@@ -147,7 +129,7 @@ function indexKmlFiles(
   ).map(([property, config]) => createIndexBuilder(property, config));
 
   let featuresRead = 0;
-  kmlFiles.forEach((file) => {
+  const promises = kmlFiles.map(async (file) => {
     if (kmlFileRe.test(file) === false) {
       return;
     }
@@ -165,7 +147,7 @@ function indexKmlFiles(
       return;
     }
     const gltfPath = path.resolve(path.dirname(kmlFile), model.gltfLink);
-    const gltf = readGltf(gltfPath);
+    const gltf = await gltfs.parseGltf(fse.readFileSync(gltfPath));
     const position = computeModelPosition(gltf, model.location);
     if (position === undefined) {
       console.error(`Failed to compute position for model: ${model.gltfLink}`);
@@ -200,6 +182,8 @@ function indexKmlFiles(
     logOnSameLine(`Features read: ${featuresRead}`);
   });
 
+  await Promise.all(promises);
+
   console.log(`\nUnique features found: ${featuresRead}`);
   console.log("Writing indexes...");
   const indexes = writeIndexes(indexBuilders, outDir);
@@ -214,7 +198,7 @@ function indexKmlFiles(
   console.log("Done.");
 }
 
-function runIndexer(argv: string[]) {
+async function runIndexer(argv: string[]) {
   const [kmlDir, indexConfigFile, outDir] = argv.slice(2);
 
   let kmlFiles: string[] = [];
@@ -240,7 +224,7 @@ function runIndexer(argv: string[]) {
   }
 
   fse.mkdirpSync(outDir);
-  indexKmlFiles(kmlDir, kmlFiles, indexesConfig, outDir);
+  await indexKmlFiles(kmlDir, kmlFiles, indexesConfig, outDir);
 }
 
 runIndexer(process.argv);
