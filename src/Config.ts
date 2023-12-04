@@ -1,9 +1,10 @@
 import { IndexType, indexTypes } from "./Index";
-import { assertObject, assertString } from "./Json";
+import { assertArray, assertObject, assertString } from "./Json";
 
 export type IndexesConfig = {
   idProperty: string;
   indexes: Record<string, IndexConfig>;
+  extraProperties: string[];
 };
 
 export type IndexConfig = {
@@ -12,12 +13,17 @@ export type IndexConfig = {
 
 export function parseIndexesConfig(json: any): IndexesConfig {
   assertObject(json, "IndexesConfig");
-  assertString(json.idProperty, "idProperty");
+  const { idProperty, extraProperties = [] } = json;
+  assertString(idProperty, "idProperty");
+
+  assertArray(extraProperties, "extraProperties");
+  extraProperties.forEach((value) => assertString(value, "extraProperties"));
 
   const indexes = parseIndexes(json.indexes);
   return {
-    idProperty: json.idProperty,
+    idProperty: idProperty,
     indexes,
+    extraProperties: (extraProperties as string[]) || [],
   };
 }
 

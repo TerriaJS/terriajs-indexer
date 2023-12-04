@@ -64,6 +64,10 @@ async function index3dTileset(tileset, tilesetDir, indexesConfig, outDir) {
         const len = resultsData.push({
             [indexesConfig.idProperty]: idValue,
             ...positionProperties,
+            ...Object.fromEntries(indexesConfig.extraProperties.map((propertyName) => [
+                propertyName,
+                properties[propertyName],
+            ])),
         });
         const dataRowId = len - 1;
         indexBuilders.forEach((b) => {

@@ -17,5 +17,8 @@
     "GEOSCAPE_ROOF_MATER": {
       "type": "enum"
     }
-  }
+  },
+
+  /* Define the properties to be used as the context for resultTemplate. */
+  "extraProperties": ["BLDGHEIGHT"]
 }
