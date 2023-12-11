@@ -60,7 +60,7 @@ export function getBinaryBatchTable(b3dm: Buffer): Buffer {
     getFeatureTableBinaryByteLength(b3dm) +
     getBatchTableJSONByteLength(b3dm);
   const end = start + getBatchTableBinaryByteLength(b3dm);
-  const binaryBuffer = b3dm.slice(start, end);
+  const binaryBuffer = Buffer.from(b3dm.slice(start, end));
   return binaryBuffer;
 }
 
