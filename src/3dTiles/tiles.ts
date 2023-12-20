@@ -11,16 +11,19 @@ type Tile = {
   children?: Tile[];
 };
 
-export function forEachTile(
+export async function forEachTile(
   tileset: Tileset,
-  iterFn: (value: { tile: Tile; computedTransform: Matrix4 }) => void
-) {
+  iterFn: (value: { tile: Tile; computedTransform: Matrix4 }) => Promise<void>
+): Promise<void> {
   const root = tileset.root;
   if (root === undefined) {
     return;
   }
 
-  const iterTile = (tile: Tile, parentTransform: Matrix4) => {
+  const iterTile = async (
+    tile: Tile,
+    parentTransform: Matrix4
+  ): Promise<void> => {
     const computedTransform =
       tile.transform !== undefined
         ? Matrix4.multiply(
@@ -29,13 +32,15 @@ export function forEachTile(
             new Matrix4()
           )
         : parentTransform;
-    iterFn({ tile, computedTransform });
+    await iterFn({ tile, computedTransform });
     if (Array.isArray(tile.children)) {
-      tile.children.forEach((child) => iterTile(child, computedTransform));
+      await Promise.all(
+        tile.children.map((child) => iterTile(child, computedTransform))
+      );
     }
   };
 
-  iterTile(root, Matrix4.IDENTITY.clone());
+  return iterTile(root, Matrix4.IDENTITY.clone());
 }
 
 export function uri(tile: Tile) {
