@@ -49,6 +49,11 @@ This generates an index in the given output directory. Check the `indexRoot.json
      "indexes": {"height": {"type": "numeric"}}
     ```
 
+- `extraProperties: string[]`
+  - Optional
+  - An array of properties other than `idProperty` to be passed as the context
+    when rendering the resultTemplate.
+
 ### Index configuration
 
 The configuration for an individual properties index.

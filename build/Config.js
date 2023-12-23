@@ -5,11 +5,15 @@ const Index_1 = require("./Index");
 const Json_1 = require("./Json");
 function parseIndexesConfig(json) {
     (0, Json_1.assertObject)(json, "IndexesConfig");
-    (0, Json_1.assertString)(json.idProperty, "idProperty");
+    const { idProperty, extraProperties = [] } = json;
+    (0, Json_1.assertString)(idProperty, "idProperty");
+    (0, Json_1.assertArray)(extraProperties, "extraProperties");
+    extraProperties.forEach((value) => (0, Json_1.assertString)(value, "extraProperties"));
     const indexes = parseIndexes(json.indexes);
     return {
-        idProperty: json.idProperty,
+        idProperty: idProperty,
         indexes,
+        extraProperties: extraProperties || [],
     };
 }
 exports.parseIndexesConfig = parseIndexesConfig;
